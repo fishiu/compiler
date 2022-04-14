@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <string>
+#include <koopa.h>
 
 // 所有 AST 的基类
 class BaseAST {

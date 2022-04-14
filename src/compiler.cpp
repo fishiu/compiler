@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstdio>
 #include <iostream>
+#include <fstream>
 #include <memory>
 #include <string>
 
@@ -27,14 +28,19 @@ int main(int argc, const char *argv[]) {
   // 打开输入文件, 并且指定 lexer 在解析的时候读取这个文件
   yyin = fopen(input, "r");
   assert(yyin);
+  ofstream fout(output);
 
   // 调用 parser 函数, parser 函数会进一步调用 lexer 解析输入文件的
   unique_ptr<BaseAST> ast;
   auto ret = yyparse(ast);
   assert(!ret);
 
+  streambuf *oldcout = cout.rdbuf(fout.rdbuf());
+
   // dump AST
   ast->Dump();
-  cout << endl;
+  
+  cout.rdbuf(oldcout);
+  fout.close();
   return 0;
 }

@@ -1,4 +1,6 @@
+/* This is a comment. */
+
 int main() {
-  // 忽略我的存在
-  return 0;
+  // This is also a comment.
+  return 3;
 }

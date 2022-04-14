@@ -3,33 +3,28 @@
 #include <iostream>
 
 void CompUnitAST::Dump() const {
-  std::cout << "CompUnitAST { ";
   func_def->Dump();
-  std::cout << " }";
 }
 
 void FuncDefAST::Dump() const {
-  std::cout << "FuncDefAST { ";
+  std::cout << "fun @" << ident << "(): ";
   func_type->Dump();
-  std::cout << ", " << ident << ", ";
+  std::cout << " {" << std::endl;
   block->Dump();
-  std::cout << " }";
+  std::cout << "}";
 }
 
 void FuncTypeAST::Dump() const {
-  std::cout << "FuncType { ";
-  std::cout << type;
-  std::cout << " }";
+  if (type == "int") {
+    std::cout << "i32";
+  }
 }
 
 void BlockAST::Dump() const {
-  std::cout << "Block { ";
+  std::cout << "\%entry:" << std::endl;
   stmt->Dump();
-  std::cout << " }";
 }
 
 void StmtAST::Dump() const {
-  std::cout << "Stmt { return ";
-  std::cout << number;
-  std::cout << " }";
+  std::cout << "  ret " << number << std::endl;  //ret 0
 }
