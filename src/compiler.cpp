@@ -7,7 +7,6 @@
 #include <fstream>
 #include <memory>
 #include <string>
-#include <string.h>
 #include <sstream>
 
 using namespace std;
@@ -31,18 +30,18 @@ int main(int argc, const char *argv[]) {
   assert(!ret);
 
   streambuf *oldcout = cout.rdbuf(fout.rdbuf());
-  if (!strcmp(mode, "-koopa")) {
+  if (std::string(mode) == "-koopa") {
     // dump AST
-    // cout << "// gen koopa" << endl;
+    cout << "// gen koopa" << endl;
     ast->Dump();
-  } else if (!strcmp(mode, "-riscv")) {
+  } else if (std::string(mode) == "-riscv") {
     // get koopa str
     stringstream ss;
     cout.rdbuf(ss.rdbuf());
     ast->Dump();
     cout.rdbuf(fout.rdbuf());
   
-    // cout << "# gen riscv" << endl;
+    cout << "# gen riscv" << endl;
     gen_riscv(ss.str());
   }
   cout.rdbuf(oldcout);
