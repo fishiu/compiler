@@ -3,5 +3,6 @@
 /build
 
 
+/testcases
 test.c
 *.koopa
