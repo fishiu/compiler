@@ -100,9 +100,9 @@ class ExpBaseAST : public BaseAST {
 
 class ExpAST : public ExpBaseAST {
  public:
-  unique_ptr<ExpBaseAST> unary;
+  unique_ptr<ExpBaseAST> add;
 
-  ExpAST(unique_ptr<ExpBaseAST>& unary) : unary(move(unary)) {}
+  ExpAST(unique_ptr<ExpBaseAST>& add) : add(move(add)) {}
   virtual void Dump() override;
   virtual void Eval() override;
 };
@@ -120,7 +120,8 @@ class UnaryAST : public ExpBaseAST {
 
   // todo what is move and unique_ptr
   UnaryAST(unique_ptr<ExpBaseAST>& primary) : primary(move(primary)) {}
-  UnaryAST(string* op, unique_ptr<ExpBaseAST>& unary) : op(*move(op)), unary(move(unary)) {}
+  UnaryAST(string* op, unique_ptr<ExpBaseAST>& unary)
+      : op(*move(op)), unary(move(unary)) {}
   virtual void Dump() override;
   virtual void Eval() override;
   virtual string DebugInfo() override {
@@ -141,6 +142,33 @@ class PrimaryAST : public ExpBaseAST {
     is_number = true;
     val = value;
   }
+  virtual void Dump() override;
+  virtual void Eval() override;
+};
+
+class MulAST : public ExpBaseAST {
+ public:
+  string op;
+  unique_ptr<ExpBaseAST> mul;
+  unique_ptr<ExpBaseAST> unary;
+
+  MulAST(unique_ptr<ExpBaseAST>& unary) : unary(move(unary)) {}
+  MulAST(string op, unique_ptr<ExpBaseAST>& mul, unique_ptr<ExpBaseAST>& unary)
+      : op(move(op)), mul(move(mul)), unary(move(unary)) {}
+  virtual void Dump() override;
+  virtual void Eval() override;
+};
+
+class AddAST : public ExpBaseAST {
+ public:
+  string op;
+  unique_ptr<ExpBaseAST> add;
+  unique_ptr<ExpBaseAST> mul;
+
+  AddAST(unique_ptr<ExpBaseAST>& mul) : mul(move(mul)) {}
+  AddAST(string op, unique_ptr<ExpBaseAST>& add, unique_ptr<ExpBaseAST>& mul)
+      : op(move(op)), add(move(add)), mul(move(mul)) {}
+
   virtual void Dump() override;
   virtual void Eval() override;
 };

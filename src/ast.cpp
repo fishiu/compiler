@@ -44,15 +44,13 @@ string ExpBaseAST::get_repr() {
   }
 }
 
-void ExpAST::Dump() {
-  unary->Dump();
-}
+void ExpAST::Dump() { add->Dump(); }
 
 void ExpAST::Eval() {
-  unary->Eval();
-  is_number = unary->is_number;
-  val = unary->val;
-  addr = unary->addr;
+  add->Eval();
+  is_number = add->is_number;
+  val = add->val;
+  addr = add->addr;
 }
 
 void UnaryAST::Dump() {
@@ -105,5 +103,79 @@ void PrimaryAST::Eval() {
     is_number = exp->is_number;
     val = exp->val;
     addr = exp->addr;
+  }
+}
+
+void MulAST::Dump() {
+  if (op == "") {
+    unary->Dump();
+  } else {
+    mul->Dump();
+    unary->Dump();
+
+    // todo
+    if (op == "*") {
+      cout << "  " << get_repr() << " = mul " << mul->get_repr() << ", "
+           << unary->get_repr() << endl;
+    } else if (op == "/") {
+      cout << "  " << get_repr() << " = div " << mul->get_repr() << ", "
+           << unary->get_repr() << endl;
+    } else if (op == "%") {
+      cout << "  " << get_repr() << " = mod " << mul->get_repr() << ", "
+           << unary->get_repr() << endl;
+    }
+  }
+}
+
+void MulAST::Eval() {
+  if (op == "") {
+    // mul -> unary
+    unary->Eval();
+    // copy info
+    is_number = unary->is_number;
+    val = unary->val;
+    addr = unary->addr;
+  } else {
+    // mul -> mul op unary
+    mul->Eval();
+    unary->Eval();
+
+    is_number = false;  // currently, mul is not number, improve in future
+    addr = new_temp();
+  }
+}
+
+void AddAST::Dump() {
+  if (op == "") {
+    mul->Dump();
+  } else {
+    add->Dump();
+    mul->Dump();
+
+    if (op == "+") {
+      cout << "  " << get_repr() << " = add " << add->get_repr() << ", "
+           << mul->get_repr() << endl;
+    } else if (op == "-") {
+      cout << "  " << get_repr() << " = sub " << add->get_repr() << ", "
+           << mul->get_repr() << endl;
+    }
+  }
+}
+
+void AddAST::Eval() {
+  if (op == "") {
+    // add -> mul
+    mul->Eval();
+    // copy info
+    is_number = mul->is_number;
+    val = mul->val;
+    addr = mul->addr;
+  } else {
+    // add -> add op mul
+    add->Eval();
+    mul->Eval();
+
+    is_number = false;  // currently, add is not number, improve in future
+    addr = new_temp();
   }
 }

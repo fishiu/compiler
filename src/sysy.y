@@ -45,7 +45,7 @@ using namespace std;
 
 // 非终结符的类型定义
 %type <ast_val> FuncDef FuncType Block Stmt
-%type <exp_ast_val> Exp UnaryExp PrimaryExp
+%type <exp_ast_val> Exp UnaryExp PrimaryExp AddExp MulExp
 %type <int_val> Number
 %type <str_val> UnaryOp
 
@@ -111,10 +111,10 @@ Stmt
   ;
 
 Exp
-  : UnaryExp {
-    printf("Exp -> UnaryExp\n");
-    auto unary = unique_ptr<ExpBaseAST>($1);
-    auto ast = new ExpAST(unary);
+  : AddExp {
+    printf("Exp -> AddExp\n");
+    auto add = unique_ptr<ExpBaseAST>($1);
+    auto ast = new ExpAST(add);
     $$ = ast;
   }
   ;
@@ -163,6 +163,59 @@ UnaryOp
     string *op = new string("!");
     printf("UnaryOp -> !\n");
     $$ = op;
+  }
+  ;
+
+MulExp
+  : UnaryExp {
+    printf("MulExp -> UnaryExp\n");
+    auto unary = unique_ptr<ExpBaseAST>($1);
+    auto ast = new MulAST(unary);
+    $$ = ast;
+  }
+  | MulExp '*' UnaryExp {
+    printf("MulExp -> MulExp * UnaryExp\n");
+    auto mul = unique_ptr<ExpBaseAST>($1);
+    auto unary = unique_ptr<ExpBaseAST>($3);
+    auto ast = new MulAST("*", mul, unary);
+    $$ = ast;
+  }
+  | MulExp '/' UnaryExp {
+    printf("MulExp -> MulExp / UnaryExp\n");
+    auto mul = unique_ptr<ExpBaseAST>($1);
+    auto unary = unique_ptr<ExpBaseAST>($3);
+    auto ast = new MulAST("/", mul, unary);
+    $$ = ast;
+  }
+  | MulExp '%' UnaryExp {
+    printf("MulExp -> MulExp %% UnaryExp\n");
+    auto mul = unique_ptr<ExpBaseAST>($1);
+    auto unary = unique_ptr<ExpBaseAST>($3);
+    auto ast = new MulAST("%", mul, unary);
+    $$ = ast;
+  }
+  ;
+
+AddExp
+  : MulExp {
+    printf("AddExp -> MulExp\n");
+    auto mul = unique_ptr<ExpBaseAST>($1);
+    auto ast = new AddAST(mul);
+    $$ = ast;
+  }
+  | AddExp '+' MulExp {
+    printf("AddExp -> AddExp + MulExp\n");
+    auto add = unique_ptr<ExpBaseAST>($1);
+    auto mul = unique_ptr<ExpBaseAST>($3);
+    auto ast = new AddAST("+", add, mul);
+    $$ = ast;
+  }
+  | AddExp '-' MulExp {
+    printf("AddExp -> AddExp - MulExp\n");
+    auto add = unique_ptr<ExpBaseAST>($1);
+    auto mul = unique_ptr<ExpBaseAST>($3);
+    auto ast = new AddAST("-", add, mul);
+    $$ = ast;
   }
   ;
 
