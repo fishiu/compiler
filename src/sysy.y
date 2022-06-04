@@ -9,6 +9,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <cassert>
 #include <ast.h>
 
 // 声明 lexer 函数和错误处理函数
@@ -33,6 +34,7 @@ using namespace std;
   std::string *str_val;
   int int_val;
   BaseAST *ast_val;
+  ExpBaseAST *exp_ast_val;
 }
 
 // lexer 返回的所有 token 种类的声明
@@ -43,7 +45,9 @@ using namespace std;
 
 // 非终结符的类型定义
 %type <ast_val> FuncDef FuncType Block Stmt
+%type <exp_ast_val> Exp UnaryExp PrimaryExp
 %type <int_val> Number
+%type <str_val> UnaryOp
 
 %%
 
@@ -91,25 +95,79 @@ FuncType
 
 Block
   : '{' Stmt '}' {
-    auto ast = new BlockAST();
-    ast->stmt = unique_ptr<BaseAST>($2);
+    auto stmt = unique_ptr<BaseAST>($2);
+    auto ast = new BlockAST(stmt);
     $$ = ast;
   }
   ;
 
 Stmt
-  : RETURN Number ';' {
-    auto ast = new StmtAST();
-    ast->number = $2;
+  : RETURN Exp ';' {
+    printf("Stmt -> return Exp\n");
+    auto exp = unique_ptr<ExpBaseAST>($2);
+    auto ast = new StmtAST(exp);
     $$ = ast;
   }
   ;
 
-Number
-  : INT_CONST {
-    $$ = $1;
+Exp
+  : UnaryExp {
+    printf("Exp -> UnaryExp\n");
+    auto unary = unique_ptr<ExpBaseAST>($1);
+    auto ast = new ExpAST(unary);
+    $$ = ast;
   }
   ;
+
+UnaryExp
+  : PrimaryExp {
+    printf("UnaryExp -> PrimaryExp\n");
+    auto primary = unique_ptr<ExpBaseAST>($1);
+    auto ast = new UnaryAST(primary);
+    $$ = ast;
+  }
+  | UnaryOp UnaryExp {
+    printf("UnaryExp -> UnaryOp(%s) UnaryExp\n", $1->c_str());
+    auto unary = unique_ptr<ExpBaseAST>($2);
+    auto ast = new UnaryAST($1, unary);
+    $$ = ast;
+  }
+  ;
+
+PrimaryExp
+  : '(' Exp ')' {
+    printf("PrimaryExp -> ( Exp )\n");
+    auto exp = unique_ptr<ExpBaseAST>($2);
+    auto ast = new PrimaryAST(exp);
+    $$ = ast;
+  }
+  | Number {
+    printf("PrimaryExp -> Number %d\n", $1);
+    auto ast = new PrimaryAST($1);
+    $$ = ast;
+  }
+  ;
+
+UnaryOp
+  : '+' {
+    string *op = new string("+");
+    printf("UnaryOp -> +\n");
+    $$ = op;
+  }
+  | '-' {
+    string *op = new string("-");
+    printf("UnaryOp -> -\n");
+    $$ = op;
+  }
+  | '!' {
+    string *op = new string("!");
+    printf("UnaryOp -> !\n");
+    $$ = op;
+  }
+  ;
+
+Number
+  : INT_CONST;
 
 %%
 
