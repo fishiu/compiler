@@ -2,7 +2,25 @@
 #include <map>
 
 int reg_cnt = 0;
+int int_reg_cnt = 0;
 std::map<const koopa_raw_value_t, std::string> vmap;
+
+std::string get_op_str(koopa_raw_binary_op_t op) {
+  switch (op) {
+    case KOOPA_RBO_ADD:
+      return "add";
+    case KOOPA_RBO_SUB:
+      return "sub";
+    case KOOPA_RBO_MUL:
+      return "mul";
+    case KOOPA_RBO_DIV:
+      return "div";
+    case KOOPA_RBO_MOD:
+      return "rem";
+    default:
+      assert(false);
+  }
+}
 
 void gen_riscv(std::string koopa_str) {
   printf("%s\n", koopa_str.c_str());
@@ -91,7 +109,7 @@ std::string Visit(const koopa_raw_value_t &value) {
       // 其他类型暂时遇不到
       assert(false);
   }
-  
+
   vmap[value] = reg;
   return reg;
 }
@@ -110,7 +128,7 @@ std::string Visit(const koopa_raw_integer_t &integer) {
   printf("visit integer\n");
   if (integer.value == 0)
     return "x0";
-  std::string reg = "t" + std::to_string(reg_cnt++);
+  std::string reg = "t" + std::to_string(int_reg_cnt++);
   std::cout << "  # li integer" << std::endl;
   std::cout << "  " << "li " << reg << ", " << integer.value << std::endl;
   return reg;
@@ -120,19 +138,27 @@ std::string Visit(const koopa_raw_integer_t &integer) {
 std::string Visit(const koopa_raw_binary_t &binary) {
   printf("visit binary\n");
   koopa_raw_binary_op_t op = binary.op;
+  int_reg_cnt = reg_cnt;
   std::string left = Visit(binary.lhs);
   std::string right = Visit(binary.rhs);
+  int_reg_cnt = reg_cnt;  // restore int_reg_cnt
   std::string reg = "t" + std::to_string(reg_cnt++);
-
+  std::string op_str;
+  
   switch (op) {
+    case KOOPA_RBO_ADD:  // add
+    case KOOPA_RBO_SUB:  // sub
+    case KOOPA_RBO_MUL:  // mul
+    case KOOPA_RBO_DIV:  // div
+    case KOOPA_RBO_MOD:  // rem
+      op_str = get_op_str(op);
+      std::cout << "  # " << op_str << std::endl;
+      std::cout << "  " << op_str << " " << reg << ", " << left << ", " << right << std::endl;
+      break;
     case KOOPA_RBO_EQ:  // eq
       std::cout << "  # eq" << std::endl;
       std::cout << "  xor " << reg << ", " << left << ", " << right << std::endl;
       std::cout << "  seqz " << reg << ", " << left << std::endl;
-      break;
-    case KOOPA_RBO_SUB:  // sub
-      std::cout << "  # sub" << std::endl;
-      std::cout << "  sub " << reg << ", " << left << ", " << right << std::endl;
       break;
     default:
       assert(false);
