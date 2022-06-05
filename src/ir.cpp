@@ -1,4 +1,4 @@
-#include <ir.h>
+#include <ir.hpp>
 
 
 void gen_riscv (std::string koopa_str) {

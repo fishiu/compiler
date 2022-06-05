@@ -1,7 +1,7 @@
 %code requires {
   #include <memory>
   #include <string>
-  #include <ast.h>
+  #include <ast.hpp>
 }
 
 %{
@@ -10,7 +10,7 @@
 #include <memory>
 #include <string>
 #include <cassert>
-#include <ast.h>
+#include <ast.hpp>
 
 // 声明 lexer 函数和错误处理函数
 int yylex();

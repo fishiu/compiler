@@ -1,4 +1,4 @@
-#include <ast.h>
+#include <ast.hpp>
 
 static list<int> tmp_var_list;
 

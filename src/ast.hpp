@@ -1,7 +1,7 @@
 #ifndef AST_H
 #define AST_H
 
-#include <global.h>
+#include <global.hpp>
 #include <koopa.h>
 
 #include <cassert>
