@@ -6,3 +6,4 @@
 /testcases
 test.c
 *.koopa
+*.s
