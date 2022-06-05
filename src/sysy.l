@@ -28,6 +28,10 @@ Decimal       [1-9][0-9]*
 Octal         0[0-7]*
 Hexadecimal   0[xX][0-9a-fA-F]+
 
+/* 关系运算符 */
+RelOP         [<|>][=]?
+EqOP          [=|!][=]
+
 %%
 
 {WhiteSpace}    { /* 忽略, 不做任何操作 */ }
@@ -42,6 +46,11 @@ Hexadecimal   0[xX][0-9a-fA-F]+
 {Decimal}       { yylval.int_val = strtol(yytext, nullptr, 0); return INT_CONST; }
 {Octal}         { yylval.int_val = strtol(yytext, nullptr, 0); return INT_CONST; }
 {Hexadecimal}   { yylval.int_val = strtol(yytext, nullptr, 0); return INT_CONST; }
+
+{RelOP}         { yylval.str_val = new string(yytext); printf("RelOP %s\n", yytext); return RELOP; }
+{EqOP}          { yylval.str_val = new string(yytext); printf("EqOP %s\n", yytext); return EQOP; }
+"&&"            { return ANDOP; }
+"||"            { return OROP; }
 
 .               { return yytext[0]; }
 

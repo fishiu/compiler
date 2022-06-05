@@ -44,13 +44,13 @@ string ExpBaseAST::get_repr() {
   }
 }
 
-void ExpAST::Dump() { add->Dump(); }
+void ExpAST::Dump() { lor->Dump(); }
 
 void ExpAST::Eval() {
-  add->Eval();
-  is_number = add->is_number;
-  val = add->val;
-  addr = add->addr;
+  lor->Eval();
+  is_number = lor->is_number;
+  val = lor->val;
+  addr = lor->addr;
 }
 
 void UnaryAST::Dump() {
@@ -113,7 +113,6 @@ void MulAST::Dump() {
     mul->Dump();
     unary->Dump();
 
-    // todo
     if (op == "*") {
       cout << "  " << get_repr() << " = mul " << mul->get_repr() << ", "
            << unary->get_repr() << endl;
@@ -176,6 +175,162 @@ void AddAST::Eval() {
     mul->Eval();
 
     is_number = false;  // currently, add is not number, improve in future
+    addr = new_temp();
+  }
+}
+
+void RelAST::Dump() {
+  if (op == "") {
+    add->Dump();
+  } else {
+    rel->Dump();
+    add->Dump();
+
+    if (op == "<") {
+      cout << "  " << get_repr() << " = lt " << rel->get_repr() << ", "
+           << add->get_repr() << endl;
+    } else if (op == ">") {
+      cout << "  " << get_repr() << " = gt " << rel->get_repr() << ", "
+           << add->get_repr() << endl;
+    } else if (op == "<=") {
+      cout << "  " << get_repr() << " = le " << rel->get_repr() << ", "
+           << add->get_repr() << endl;
+    } else if (op == ">=") {
+      cout << "  " << get_repr() << " = ge " << rel->get_repr() << ", "
+           << add->get_repr() << endl;
+    }
+  }
+}
+
+void RelAST::Eval() {
+  if (op == "") {
+    // rel -> add
+    add->Eval();
+    // copy info
+    is_number = add->is_number;
+    val = add->val;
+    addr = add->addr;
+  } else {
+    // rel -> rel op add
+    rel->Eval();
+    add->Eval();
+
+    is_number = false;  // currently, rel is not number, improve in future
+    addr = new_temp();
+  }
+}
+
+void EqAST::Dump() {
+  if (op == "") {
+    rel->Dump();
+  } else {
+    eq->Dump();
+    rel->Dump();
+
+    if (op == "==") {
+      cout << "  " << get_repr() << " = eq " << eq->get_repr() << ", "
+           << rel->get_repr() << endl;
+    } else if (op == "!=") {
+      cout << "  " << get_repr() << " = ne " << eq->get_repr() << ", "
+           << rel->get_repr() << endl;
+    }
+  }
+}
+
+void EqAST::Eval() {
+  if (op == "") {
+    // eq -> rel
+    rel->Eval();
+    // copy info
+    is_number = rel->is_number;
+    val = rel->val;
+    addr = rel->addr;
+  } else {
+    // eq -> eq op rel
+    eq->Eval();
+    rel->Eval();
+
+    is_number = false;  // currently, eq is not number, improve in future
+    addr = new_temp();
+  }
+}
+
+void LAndAST::Dump() {
+  if (is_single) {
+    eq->Dump();
+  } else {
+    land->Dump();
+    // check if land is 0
+    int land_tmp = new_temp();
+    cout << "  %" << land_tmp << " = eq " << land->get_repr() << ", 0" << endl;
+
+    eq->Dump();
+    // check if eq is 0
+    int eq_tmp = new_temp();
+    cout << "  %" << eq_tmp << " = eq " << eq->get_repr() << ", 0" << endl;
+
+    // create tmp and flip on tmp
+    int tmp_addr = new_temp();
+    cout << "  %" << tmp_addr << " = or %" << land_tmp << ", %" << eq_tmp << endl;
+
+    cout << "  " << get_repr() << " = eq %" << tmp_addr << ", 0 " << endl;
+  }
+}
+
+void LAndAST::Eval() {
+  if (is_single) {
+    // land -> eq
+    eq->Eval();
+    // copy info
+    is_number = eq->is_number;
+    val = eq->val;
+    addr = eq->addr;
+  } else {
+    // land -> land op eq
+    land->Eval();
+    eq->Eval();
+
+    is_number = false;  // currently, land is not number, improve in future
+    addr = new_temp();
+  }
+}
+
+void LOrAST::Dump() {
+  if (is_single) {
+    land->Dump();
+  } else {
+    lor->Dump();
+    // check if lor is 0
+    int lor_tmp = new_temp();
+    cout << "  %" << lor_tmp << " = eq " << lor->get_repr() << ", 0" << endl;
+
+    land->Dump();
+    // check if land is 0
+    int land_tmp = new_temp();
+    cout << "  %" << land_tmp << " = eq " << land->get_repr() << ", 0" << endl;
+
+    // create tmp and flip on tmp
+    int tmp_addr = new_temp();
+    cout << "  %" << tmp_addr << " = and %" << lor_tmp << ", %" << land_tmp << endl;
+
+    cout << "  " << get_repr() << " = eq %" << tmp_addr << ", 0 " << endl;
+  }
+}
+
+void LOrAST::Eval() {
+  if (is_single) {
+    // lor -> land
+    land->Eval();
+    // copy info
+    is_number = land->is_number;
+    val = land->val;
+    addr = land->addr;
+  } else {
+    // lor -> lor op land
+    lor->Eval();
+    land->Eval();
+
+    is_number = false;  // currently, lor is not number, improve in future
     addr = new_temp();
   }
 }

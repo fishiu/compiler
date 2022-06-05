@@ -42,10 +42,11 @@ using namespace std;
 %token INT RETURN
 %token <str_val> IDENT
 %token <int_val> INT_CONST
+%token <str_val> RELOP EQOP ANDOP OROP
 
 // 非终结符的类型定义
 %type <ast_val> FuncDef FuncType Block Stmt
-%type <exp_ast_val> Exp UnaryExp PrimaryExp AddExp MulExp
+%type <exp_ast_val> Exp UnaryExp PrimaryExp AddExp MulExp RelExp EqExp LAndExp LOrExp
 %type <int_val> Number
 %type <str_val> UnaryOp
 
@@ -111,10 +112,10 @@ Stmt
   ;
 
 Exp
-  : AddExp {
-    printf("Exp -> AddExp\n");
-    auto add = unique_ptr<ExpBaseAST>($1);
-    auto ast = new ExpAST(add);
+  : LOrExp {
+    printf("Exp -> LOrExp\n");
+    auto lor = unique_ptr<ExpBaseAST>($1);
+    auto ast = new ExpAST(lor);
     $$ = ast;
   }
   ;
@@ -215,6 +216,70 @@ AddExp
     auto add = unique_ptr<ExpBaseAST>($1);
     auto mul = unique_ptr<ExpBaseAST>($3);
     auto ast = new AddAST("-", add, mul);
+    $$ = ast;
+  }
+  ;
+
+RelExp
+  : AddExp {
+    printf("RelExp -> AddExp\n");
+    auto add = unique_ptr<ExpBaseAST>($1);
+    auto ast = new RelAST(add);
+    $$ = ast;
+  }
+  | RelExp RELOP AddExp {
+    printf("RelExp -> RelExp %s AddExp\n", $2->c_str());
+    auto rel = unique_ptr<ExpBaseAST>($1);
+    auto add = unique_ptr<ExpBaseAST>($3);
+    auto ast = new RelAST($2, rel, add);
+    $$ = ast;
+  }
+  ;
+
+EqExp
+  : RelExp {
+    printf("EqExp -> RelExp\n");
+    auto rel = unique_ptr<ExpBaseAST>($1);
+    auto ast = new EqAST(rel);
+    $$ = ast;
+  }
+  | EqExp EQOP RelExp {
+    printf("EqExp -> EqExp %s RelExp\n", $2->c_str());
+    auto eq = unique_ptr<ExpBaseAST>($1);
+    auto rel = unique_ptr<ExpBaseAST>($3);
+    auto ast = new EqAST($2, eq, rel);
+    $$ = ast;
+  }
+  ;
+
+LAndExp
+  : EqExp {
+    printf("LAndExp -> EqExp\n");
+    auto eq = unique_ptr<ExpBaseAST>($1);
+    auto ast = new LAndAST(eq);
+    $$ = ast;
+  }
+  | LAndExp ANDOP EqExp {
+    printf("LAndExp -> LAndExp && EqExp\n");
+    auto land = unique_ptr<ExpBaseAST>($1);
+    auto eq = unique_ptr<ExpBaseAST>($3);
+    auto ast = new LAndAST(land, eq);
+    $$ = ast;
+  }
+  ;
+
+LOrExp
+  : LAndExp {
+    printf("LOrExp -> LAndExp\n");
+    auto land = unique_ptr<ExpBaseAST>($1);
+    auto ast = new LOrAST(land);
+    $$ = ast;
+  }
+  | LOrExp OROP LAndExp {
+    printf("LOrExp -> LOrExp || LAndExp\n");
+    auto lor = unique_ptr<ExpBaseAST>($1);
+    auto land = unique_ptr<ExpBaseAST>($3);
+    auto ast = new LOrAST(lor, land);
     $$ = ast;
   }
   ;

@@ -22,6 +22,12 @@ class StmtAST;
 class ExpAST;
 class UnaryAST;
 class PrimaryAST;
+class MulAST;
+class AddAST;
+class RelAST;
+class EqAST;
+class LAndAST;
+class LorAST;
 
 // 所有 AST 的基类
 class BaseAST {
@@ -100,9 +106,9 @@ class ExpBaseAST : public BaseAST {
 
 class ExpAST : public ExpBaseAST {
  public:
-  unique_ptr<ExpBaseAST> add;
+  unique_ptr<ExpBaseAST> lor;
 
-  ExpAST(unique_ptr<ExpBaseAST>& add) : add(move(add)) {}
+  ExpAST(unique_ptr<ExpBaseAST>& add) : lor(move(add)) {}
   virtual void Dump() override;
   virtual void Eval() override;
 };
@@ -168,6 +174,62 @@ class AddAST : public ExpBaseAST {
   AddAST(unique_ptr<ExpBaseAST>& mul) : mul(move(mul)) {}
   AddAST(string op, unique_ptr<ExpBaseAST>& add, unique_ptr<ExpBaseAST>& mul)
       : op(move(op)), add(move(add)), mul(move(mul)) {}
+
+  virtual void Dump() override;
+  virtual void Eval() override;
+};
+
+class RelAST : public ExpBaseAST {
+ public:
+  string op;
+  unique_ptr<ExpBaseAST> rel;
+  unique_ptr<ExpBaseAST> add;
+
+  RelAST(unique_ptr<ExpBaseAST>& add) : add(move(add)) {}
+  RelAST(string* op, unique_ptr<ExpBaseAST>& rel, unique_ptr<ExpBaseAST>& add)
+      : op(*move(op)), rel(move(rel)), add(move(add)) {}
+
+  virtual void Dump() override;
+  virtual void Eval() override;
+};
+
+class EqAST : public ExpBaseAST {
+ public:
+  string op;
+  unique_ptr<ExpBaseAST> eq;
+  unique_ptr<ExpBaseAST> rel;
+
+  EqAST(unique_ptr<ExpBaseAST>& rel) : rel(move(rel)) {}
+  EqAST(string* op, unique_ptr<ExpBaseAST>& eq, unique_ptr<ExpBaseAST>& rel)
+      : op(*move(op)), eq(move(eq)), rel(move(rel)) {}
+
+  virtual void Dump() override;
+  virtual void Eval() override;
+};
+
+class LAndAST : public ExpBaseAST {
+ public:
+  bool is_single;
+  unique_ptr<ExpBaseAST> land;
+  unique_ptr<ExpBaseAST> eq;
+
+  LAndAST(unique_ptr<ExpBaseAST>& eq) :is_single(true), eq(move(eq)) {}
+  LAndAST(unique_ptr<ExpBaseAST>& land, unique_ptr<ExpBaseAST>& eq)
+      : is_single(false), land(move(land)), eq(move(eq)) {}
+
+  virtual void Dump() override;
+  virtual void Eval() override;
+};
+
+class LOrAST : public ExpBaseAST {
+ public:
+  bool is_single;
+  unique_ptr<ExpBaseAST> lor;
+  unique_ptr<ExpBaseAST> land;
+
+  LOrAST(unique_ptr<ExpBaseAST>& land) : is_single(true), land(move(land)) {}
+  LOrAST(unique_ptr<ExpBaseAST>& lor, unique_ptr<ExpBaseAST>& land)
+      : is_single(false), lor(move(lor)), land(move(land)) {}
 
   virtual void Dump() override;
   virtual void Eval() override;
