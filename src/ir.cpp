@@ -2,7 +2,22 @@
 #include <map>
 
 int reg_cnt = 0;
-int int_reg_cnt = 0;
+int int_reg_cnt = 0;  // int_reg will be cleaned after visiting a value
+
+std::string format_reg(int reg_num) {
+  std::string reg_str;
+  if (reg_num < 7) {  // t0 ~ t6
+    reg_str = "t" + std::to_string(reg_num);
+  } else if (reg_num < 15) {  // a0 ~ a7
+    reg_str = "a" + std::to_string(reg_num - 7);
+  } else {
+    assert(false);
+  }
+  return reg_str;
+}
+
+// must use a value map, so when referred to a value pointer
+// it won't be dump twice
 std::map<const koopa_raw_value_t, std::string> vmap;
 
 std::string get_op_str(koopa_raw_binary_op_t op) {
@@ -17,6 +32,14 @@ std::string get_op_str(koopa_raw_binary_op_t op) {
       return "div";
     case KOOPA_RBO_MOD:
       return "rem";
+    case KOOPA_RBO_LT:
+      return "slt";
+    case KOOPA_RBO_AND:
+      return "and";
+    case KOOPA_RBO_OR:
+      return "or";
+    case KOOPA_RBO_GT:
+      return "sgt";
     default:
       assert(false);
   }
@@ -128,7 +151,7 @@ std::string Visit(const koopa_raw_integer_t &integer) {
   printf("visit integer\n");
   if (integer.value == 0)
     return "x0";
-  std::string reg = "t" + std::to_string(int_reg_cnt++);
+  std::string reg = format_reg(int_reg_cnt++);
   std::cout << "  # li integer" << std::endl;
   std::cout << "  " << "li " << reg << ", " << integer.value << std::endl;
   return reg;
@@ -138,11 +161,12 @@ std::string Visit(const koopa_raw_integer_t &integer) {
 std::string Visit(const koopa_raw_binary_t &binary) {
   printf("visit binary\n");
   koopa_raw_binary_op_t op = binary.op;
+  // assume: only int will assign new reg when Visit(koopa_value)
   int_reg_cnt = reg_cnt;
   std::string left = Visit(binary.lhs);
   std::string right = Visit(binary.rhs);
   int_reg_cnt = reg_cnt;  // restore int_reg_cnt
-  std::string reg = "t" + std::to_string(reg_cnt++);
+  std::string reg = format_reg(reg_cnt++);
   std::string op_str;
   
   switch (op) {
@@ -151,6 +175,10 @@ std::string Visit(const koopa_raw_binary_t &binary) {
     case KOOPA_RBO_MUL:  // mul
     case KOOPA_RBO_DIV:  // div
     case KOOPA_RBO_MOD:  // rem
+    case KOOPA_RBO_LT:   // slt
+    case KOOPA_RBO_AND:  // and
+    case KOOPA_RBO_OR:   // or
+    case KOOPA_RBO_GT:   // sgt
       op_str = get_op_str(op);
       std::cout << "  # " << op_str << std::endl;
       std::cout << "  " << op_str << " " << reg << ", " << left << ", " << right << std::endl;
@@ -158,7 +186,19 @@ std::string Visit(const koopa_raw_binary_t &binary) {
     case KOOPA_RBO_EQ:  // eq
       std::cout << "  # eq" << std::endl;
       std::cout << "  xor " << reg << ", " << left << ", " << right << std::endl;
-      std::cout << "  seqz " << reg << ", " << left << std::endl;
+      std::cout << "  seqz " << reg << ", " << reg << std::endl;
+      break;
+    case KOOPA_RBO_NOT_EQ:  // neq
+      std::cout << "  xor " << reg << ", " << left << ", " << right << std::endl;
+      std::cout << "  snez " << reg << ", " << reg << std::endl;
+      break;
+    case KOOPA_RBO_LE:  // le
+      std::cout << "  sgt " << reg << ", " << left << ", " << right << std::endl;
+      std::cout << "  xori " << reg << ", " << reg << ", 1" << std::endl; 
+      break;
+    case KOOPA_RBO_GE:  // ge
+      std::cout << "  slt " << reg << ", " << left << ", " << right << std::endl;
+      std::cout << "  xori " << reg << ", " << reg << ", 1" << std::endl; 
       break;
     default:
       assert(false);
