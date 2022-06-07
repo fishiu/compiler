@@ -7,6 +7,7 @@
 #include <cassert>
 #include <iostream>
 #include <list>
+#include <vector>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -15,13 +16,23 @@ using namespace std;
 
 class BaseAST;
 class ExpBaseAST;
+class VecAST;
 class FuncDefAST;
 class FuncTypeAST;
 class BlockAST;
+class BlockItemAST;
 class StmtAST;
+class DeclAST;
+class ConstDeclAST;
+class BTypeAST;
+class ConstDefAST;  // expbase
+class ConstInitValAST;  // expbase
+class ConstExpAST;  // expbase
+
 class ExpAST;
 class UnaryAST;
 class PrimaryAST;
+class LValAST;
 class MulAST;
 class AddAST;
 class RelAST;
@@ -34,6 +45,53 @@ class BaseAST {
  public:
   virtual ~BaseAST() = default;
   virtual void Dump() = 0;  // overide <<
+};
+
+class VecAST {
+ public:
+  vector<unique_ptr<BaseAST>> vec;
+
+  void push_back(unique_ptr<BaseAST>& ast) {
+    vec.push_back(move(ast));
+  }
+};
+
+// currently, it only contains one unary expression
+class ExpBaseAST : public BaseAST {
+ public:
+  bool evaluated = false;  // avoid re-evaluation (only for const exp)
+  bool is_number = false;  // const number
+  bool is_const = false;   // is const expression (so no re-evaluate)
+  int val;
+  int addr;
+
+  string get_repr();
+  // go through all the downstream nodes and get the value and address
+  // 1. whether the node is a number node
+  // 2. get the address: if it is a number node, the address is the number, else
+  // the address is the register
+  virtual void Eval() = 0;
+  // virtual void SmartEval() {
+  //   if (evaluated) return;
+  //   Eval();
+  //   if (!is_const) evaluated = true;
+  // }
+  void CopyInfo(unique_ptr<ExpBaseAST>& exp) {
+    evaluated = exp->evaluated;
+    is_number = exp->is_number;
+    is_const = exp->is_const;
+    val = exp->val;
+    addr = exp->addr;
+  }
+  virtual string DebugInfo() {
+    stringstream buffer;
+    if (is_number) {
+      buffer << "is number: " << val;
+    } else {
+      buffer << "not number, addr: " << addr;
+    }
+    return buffer.str();
+  }
 };
 
 // CompUnit 是 BaseAST
@@ -65,9 +123,19 @@ class FuncTypeAST : public BaseAST {
 
 class BlockAST : public BaseAST {
  public:
-  unique_ptr<BaseAST> stmt;
+  unique_ptr<VecAST> blocks;  // block item list
 
-  BlockAST(unique_ptr<BaseAST>& stmt) : stmt(move(stmt)) {}
+  BlockAST(unique_ptr<VecAST>& blocks) : blocks(move(blocks)) {}
+  virtual void Dump() override;
+};
+
+class BlockItemAST : public BaseAST {
+ public:
+  unique_ptr<BaseAST> ast;
+  bool is_stmt;  // stmt or decl
+
+  BlockItemAST(unique_ptr<BaseAST>& ast, bool is_stmt)
+      : ast(move(ast)), is_stmt(is_stmt) {}
   virtual void Dump() override;
 };
 
@@ -80,28 +148,62 @@ class StmtAST : public BaseAST {
   virtual void Dump() override;
 };
 
-// currently, it only contains one unary expression
-class ExpBaseAST : public BaseAST {
+class DeclAST : public BaseAST {
  public:
-  bool is_number;  // const number
-  int val;
-  int addr;
+  unique_ptr<BaseAST> const_decl;
 
-  string get_repr();
-  // go through all the downstream nodes and get the value and address
-  // 1. whether the node is a number node
-  // 2. get the address: if it is a number node, the address is the number, else
-  // the address is the register
-  virtual void Eval() = 0;
-  virtual string DebugInfo() {
-    stringstream buffer;
-    if (is_number) {
-      buffer << "is number: " << val;
-    } else {
-      buffer << "not number, addr: " << addr;
-    }
-    return buffer.str();
+  DeclAST(unique_ptr<BaseAST>& const_decl) : const_decl(move(const_decl)) {}
+  virtual void Dump() override;
+};
+
+class ConstDeclAST : public BaseAST {
+ public:
+  unique_ptr<BaseAST> btype;
+  unique_ptr<VecAST> def_list;
+
+  ConstDeclAST(unique_ptr<BaseAST>& btype, unique_ptr<VecAST>& def_list)
+      : btype(move(btype)), def_list(move(def_list)) {}
+  virtual void Dump() override;
+};
+
+class BTypeAST : public BaseAST {
+ public:
+  string type;
+
+  BTypeAST(string type) : type(move(type)) {}
+  virtual void Dump() override {}
+};
+
+class ConstDefAST : public BaseAST {
+ public:
+  unique_ptr<string> ident;     // symtab
+  unique_ptr<ExpBaseAST> init;  // init value
+
+  ConstDefAST(unique_ptr<string>& ident_, unique_ptr<ExpBaseAST>& init_)
+      : ident(move(ident_)), init(move(init_)) {
+    init->Eval();  // evaluate
+    assert(init->is_number && init->is_const);
+    symtab.Insert(ident, init->val);
   }
+  virtual void Dump() override;
+};
+
+class ConstInitValAST : public ExpBaseAST {
+ public:
+  unique_ptr<ExpBaseAST> exp;  // const exp
+
+  ConstInitValAST(unique_ptr<ExpBaseAST>& exp) : exp(move(exp)) {}
+  virtual void Dump() override;
+  virtual void Eval() override;
+};
+
+class ConstExpAST : public ExpBaseAST {
+ public:
+  unique_ptr<ExpBaseAST> exp;
+
+  ConstExpAST(unique_ptr<ExpBaseAST>& exp) : exp(move(exp)) {}
+  virtual void Dump() override;
+  virtual void Eval() override;
 };
 
 class ExpAST : public ExpBaseAST {
@@ -141,15 +243,38 @@ class UnaryAST : public ExpBaseAST {
 // number or parathesis expression
 class PrimaryAST : public ExpBaseAST {
  public:
+  bool is_lval = false;
+  bool is_exp = false;
   unique_ptr<ExpBaseAST> exp;
+  unique_ptr<ExpBaseAST> lval;
 
-  PrimaryAST(unique_ptr<ExpBaseAST>& exp) : exp(move(exp)) {}
+  PrimaryAST(unique_ptr<ExpBaseAST>& ast, bool is_lval) {
+    this->is_lval = is_lval;
+    this->is_exp = !is_lval;
+    if (is_lval) {
+      lval = move(ast);
+    } else {
+      exp = move(ast);
+    }
+  }
   PrimaryAST(int value) {
     is_number = true;
     val = value;
   }
   virtual void Dump() override;
   virtual void Eval() override;
+};
+
+class LValAST : public ExpBaseAST {
+ public:
+  unique_ptr<string> ident;
+
+  LValAST(unique_ptr<string>& ident) {
+    val = symtab.Lookup(ident);
+    this->ident = move(ident);
+  }
+  virtual void Dump() override {}
+  virtual void Eval() override {}
 };
 
 class MulAST : public ExpBaseAST {

@@ -40,6 +40,7 @@ EqOP          [=|!][=]
 
 "int"           { return INT; }
 "return"        { return RETURN; }
+"const"        { return CONST; }
 
 {Identifier}    { yylval.str_val = new string(yytext); return IDENT; }
 
