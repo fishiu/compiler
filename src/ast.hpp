@@ -242,7 +242,6 @@ class VarDefAST : public BaseAST {
 
   VarDefAST(unique_ptr<string>& ident_, unique_ptr<ExpBaseAST>& init_)
       : ident(move(ident_)), init(move(init_)), has_init(true) {
-    init->Eval();  // evaluate, load evaluation result in Dump()
     mem_addr = symtab.Insert(ident);
   }
 

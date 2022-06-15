@@ -127,7 +127,6 @@ BlockItem
     $$ = ast;
   }
   | Decl {
-    // asign
     printf("------------BlockItem: Decl------------\n");
     auto decl = unique_ptr<BaseAST>($1);
     auto ast = new BlockItemAST(decl, false);
@@ -264,6 +263,7 @@ Stmt
     $$ = ast;
   }
   | LVal '=' Exp ';' {
+    // assign
     printf("Stmt -> LVal = Exp\n");
     auto lval = unique_ptr<ExpBaseAST>($1);
     // cast lval to LValAST

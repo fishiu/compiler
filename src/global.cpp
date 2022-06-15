@@ -3,6 +3,7 @@
 
 int tmp_var_no = 0;
 string NewTempVar() {
+  printf(" [debug] renew tmp var: %d\n", tmp_var_no);
   return "%" + to_string(tmp_var_no++);
 }
 SymTab symtab;
@@ -15,7 +16,7 @@ void SymTab::Insert(unique_ptr<string>& symbol, int value) {
 string SymTab::Insert(unique_ptr<string>& symbol) {
   assert(!Exist(symbol));
   string name = "@" + *symbol + "_" + to_string(var_cnt++);
-  printf("[debug] alloc %s\n", name.c_str());
+  printf(" [debug] alloc %s\n", name.c_str());
   symtab[*symbol] = name;
   return name;
 }
