@@ -24,10 +24,13 @@ class BlockItemAST;
 class StmtAST;
 class DeclAST;
 class ConstDeclAST;
+class VarDeclAST;
 class BTypeAST;
 class ConstDefAST;  // expbase
+class VarDefAST;    // expbase
 class ConstInitValAST;  // expbase
 class ConstExpAST;  // expbase
+class InitValAST;  // expbase
 
 class ExpAST;
 class UnaryAST;
@@ -63,19 +66,23 @@ class ExpBaseAST : public BaseAST {
   bool is_number = false;  // const number
   bool is_const = false;   // is const expression (so no re-evaluate)
   int val;
-  int addr;
+  string addr;
 
-  string get_repr();
   // go through all the downstream nodes and get the value and address
   // 1. whether the node is a number node
   // 2. get the address: if it is a number node, the address is the number, else
   // the address is the register
   virtual void Eval() = 0;
-  // virtual void SmartEval() {
-  //   if (evaluated) return;
-  //   Eval();
-  //   if (!is_const) evaluated = true;
-  // }
+  
+  // if number than return val, else return tmp var
+  virtual string get_repr() {
+    if (is_number) {
+      return to_string(val);
+    } else {
+      return addr;
+    }
+  }
+  
   void CopyInfo(unique_ptr<ExpBaseAST>& exp) {
     evaluated = exp->evaluated;
     is_number = exp->is_number;
@@ -83,6 +90,7 @@ class ExpBaseAST : public BaseAST {
     val = exp->val;
     addr = exp->addr;
   }
+  
   virtual string DebugInfo() {
     stringstream buffer;
     if (is_number) {
@@ -141,18 +149,22 @@ class BlockItemAST : public BaseAST {
 
 class StmtAST : public BaseAST {
  public:
-  // int number;
-  unique_ptr<ExpBaseAST> exp;
+  unique_ptr<ExpBaseAST> exp;  // return exp
+  unique_ptr<ExpBaseAST> lval; // lval = exp
+  bool is_ret = false;
 
-  StmtAST(unique_ptr<ExpBaseAST>& exp) : exp(move(exp)) {}
+  StmtAST(unique_ptr<ExpBaseAST>& exp) : exp(move(exp)), is_ret(true) {}
+  StmtAST(unique_ptr<ExpBaseAST>& lval, unique_ptr<ExpBaseAST>& exp)
+      : exp(move(exp)), lval(move(lval)) {}
   virtual void Dump() override;
 };
 
 class DeclAST : public BaseAST {
  public:
-  unique_ptr<BaseAST> const_decl;
+  unique_ptr<BaseAST> decl;
+  bool is_var;  // todo use global type in future
 
-  DeclAST(unique_ptr<BaseAST>& const_decl) : const_decl(move(const_decl)) {}
+  DeclAST(unique_ptr<BaseAST>& decl, bool is_var) : decl(move(decl)), is_var(is_var) {}
   virtual void Dump() override;
 };
 
@@ -202,6 +214,46 @@ class ConstExpAST : public ExpBaseAST {
   unique_ptr<ExpBaseAST> exp;
 
   ConstExpAST(unique_ptr<ExpBaseAST>& exp) : exp(move(exp)) {}
+  virtual void Dump() override;
+  virtual void Eval() override;
+};
+
+class VarDeclAST : public BaseAST {
+ public:
+  unique_ptr<BaseAST> btype;
+  unique_ptr<VecAST> def_list;
+
+  VarDeclAST(unique_ptr<BaseAST>& btype, unique_ptr<VecAST>& def_list)
+      : btype(move(btype)), def_list(move(def_list)) {}
+  virtual void Dump() override;
+};
+
+class VarDefAST : public BaseAST {
+ public:
+  unique_ptr<string> ident;
+  unique_ptr<ExpBaseAST> init;
+  string mem_addr;
+  bool has_init;
+
+  VarDefAST(unique_ptr<string>& ident_) : ident(move(ident_)), has_init(false) {
+    // no init
+    mem_addr = symtab.Insert(ident);
+  }
+
+  VarDefAST(unique_ptr<string>& ident_, unique_ptr<ExpBaseAST>& init_)
+      : ident(move(ident_)), init(move(init_)), has_init(true) {
+    init->Eval();  // evaluate, load evaluation result in Dump()
+    mem_addr = symtab.Insert(ident);
+  }
+
+  virtual void Dump() override;
+};
+
+class InitValAST : public ExpBaseAST {
+ public:
+  unique_ptr<ExpBaseAST> exp;
+
+  InitValAST(unique_ptr<ExpBaseAST>& exp) : exp(move(exp)) {}
   virtual void Dump() override;
   virtual void Eval() override;
 };
@@ -259,6 +311,8 @@ class PrimaryAST : public ExpBaseAST {
   }
   PrimaryAST(int value) {
     is_number = true;
+    is_const = true;
+    evaluated = true;
     val = value;
   }
   virtual void Dump() override;
@@ -268,13 +322,15 @@ class PrimaryAST : public ExpBaseAST {
 class LValAST : public ExpBaseAST {
  public:
   unique_ptr<string> ident;
+  sym_t sym;
+  string mem_addr;  // address in memory
+  bool at_left;
 
-  LValAST(unique_ptr<string>& ident) {
-    val = symtab.Lookup(ident);
-    this->ident = move(ident);
+  LValAST(unique_ptr<string>& ident_) : ident(move(ident_)) {
+    sym = symtab.Lookup(ident);
   }
-  virtual void Dump() override {}
-  virtual void Eval() override {}
+  virtual void Dump() override;
+  virtual void Eval() override;
 };
 
 class MulAST : public ExpBaseAST {

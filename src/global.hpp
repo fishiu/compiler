@@ -4,12 +4,15 @@
 #include <map>
 #include <string>
 #include <memory>
+#include <variant>
 
 using namespace std;
 
+typedef variant<int, string> sym_t;
 class SymTab;
 
 extern int tmp_var_no;  // current temp variable number
+string NewTempVar();
 extern SymTab symtab;  // current temp variable number
 
 
@@ -17,13 +20,16 @@ extern SymTab symtab;  // current temp variable number
 class SymTab {
  public:
   SymTab() {}
-  // currently only have int const value
+  // def const
   void Insert(unique_ptr<string>& symbol, int value);
+  // def var (whether has init, whether init is int or lval)
+  string Insert(unique_ptr<string>& symbol);  // will create addr
   bool Exist(unique_ptr<string>& symbol);
-  int Lookup(unique_ptr<string>& symbol);
+  sym_t Lookup(unique_ptr<string>& symbol);
 
  private:
-  map<string, int> symtab;
+  int var_cnt = 0;  // count var to name addr
+  map<string, sym_t> symtab;
 };
 
 #endif

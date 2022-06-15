@@ -47,11 +47,11 @@ using namespace std;
 %token <str_val> RELOP EQOP ANDOP OROP
 
 // 非终结符的类型定义
-%type <ast_val> FuncDef FuncType Decl ConstDecl ConstDef Block BlockItem Stmt BType
-%type <exp_ast_val> ConstExp ConstInitVal Exp UnaryExp PrimaryExp LVal AddExp MulExp RelExp EqExp LAndExp LOrExp
+%type <ast_val> FuncDef FuncType Decl ConstDecl ConstDef VarDecl VarDef Block BlockItem Stmt BType
+%type <exp_ast_val> ConstExp ConstInitVal InitVal Exp UnaryExp PrimaryExp LVal AddExp MulExp RelExp EqExp LAndExp LOrExp
 %type <int_val> Number
 %type <str_val> UnaryOp
-%type <vec_val> BlockItemList ConstDefList
+%type <vec_val> BlockItemList ConstDefList VarDefList
 
 %%
 
@@ -121,11 +121,14 @@ BlockItemList
 
 BlockItem
   : Stmt {
+    printf("------------BlockItem: Stmt------------\n");
     auto stmt = unique_ptr<BaseAST>($1);
     auto ast = new BlockItemAST(stmt, true);
     $$ = ast;
   }
   | Decl {
+    // asign
+    printf("------------BlockItem: Decl------------\n");
     auto decl = unique_ptr<BaseAST>($1);
     auto ast = new BlockItemAST(decl, false);
     $$ = ast;
@@ -135,7 +138,12 @@ BlockItem
 Decl
   : ConstDecl {
     auto const_decl = unique_ptr<BaseAST>($1);
-    auto ast = new DeclAST(const_decl);
+    auto ast = new DeclAST(const_decl, false);
+    $$ = ast;
+  }
+  | VarDecl {
+    auto var_decl = unique_ptr<BaseAST>($1);
+    auto ast = new DeclAST(var_decl, true);
     $$ = ast;
   }
   ;
@@ -196,11 +204,73 @@ ConstExp
   }
   ;
 
+VarDecl
+  : BType VarDefList ';' {
+    auto btype = unique_ptr<BaseAST>($1);
+    // cast btype to BTypeAST
+    auto btype_ast = static_cast<BTypeAST*>(btype.get());
+    printf("VarDecl -> %s VarDefList\n", btype_ast->type.c_str());
+    auto var_def_list = unique_ptr<VecAST>($2);
+    auto ast = new VarDeclAST(btype, var_def_list);
+    $$ = ast;
+  }
+  ;
+
+VarDefList
+  : VarDef {
+    auto vec = new VecAST();
+    auto var_def = unique_ptr<BaseAST>($1);
+    vec->push_back(var_def);
+    $$ = vec;
+  }
+  | VarDefList ',' VarDef {
+    auto vec = $1;
+    auto var_def = unique_ptr<BaseAST>($3);
+    vec->push_back(var_def);
+    $$ = vec;
+  }
+  ;
+
+VarDef
+  : IDENT {
+    auto ident = unique_ptr<string>($1);
+    printf("VarDef -> %s\n", ident->c_str());
+    auto ast = new VarDefAST(ident);
+    $$ = ast;
+  }
+  | IDENT '=' InitVal {
+    auto ident = unique_ptr<string>($1);
+    printf("VarDef -> %s = InitVal", ident->c_str());
+    auto init_val = unique_ptr<ExpBaseAST>($3);
+    auto ast = new VarDefAST(ident, init_val);
+    $$ = ast;
+  }
+  ;
+
+InitVal
+  : Exp {
+    printf("InitVal -> Exp\n");
+    auto exp = unique_ptr<ExpBaseAST>($1);
+    auto ast = new InitValAST(exp);
+    $$ = ast;
+  }
+  ;
+
 Stmt
   : RETURN Exp ';' {
     printf("Stmt -> return Exp\n");
     auto exp = unique_ptr<ExpBaseAST>($2);
     auto ast = new StmtAST(exp);
+    $$ = ast;
+  }
+  | LVal '=' Exp ';' {
+    printf("Stmt -> LVal = Exp\n");
+    auto lval = unique_ptr<ExpBaseAST>($1);
+    // cast lval to LValAST
+    auto lval_ast = static_cast<LValAST*>(lval.get());
+    lval_ast->at_left = true;
+    auto exp = unique_ptr<ExpBaseAST>($3);
+    auto ast = new StmtAST(lval, exp);
     $$ = ast;
   }
   ;

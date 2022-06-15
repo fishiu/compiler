@@ -2,12 +2,6 @@
 
 static list<int> tmp_var_list;
 
-// new temp var
-// static inline int new_temp() {
-//   tmp_var_list.push_front(tmp_var_no++);
-//   return tmp_var_list.front();
-// }
-
 void CompUnitAST::Dump() { func_def->Dump(); }
 
 void FuncDefAST::Dump() {
@@ -36,7 +30,8 @@ void BlockItemAST::Dump() {
 }
 
 void DeclAST::Dump() {
-  const_decl->Dump();
+  cout << "\n  // decl" << endl;
+  decl->Dump();
 }
 
 void ConstDeclAST::Dump() {
@@ -83,18 +78,55 @@ void ConstExpAST::Eval() {
 }
 
 void StmtAST::Dump() {
-  exp->Eval();
-  exp->Dump();
-  cout << "  ret " << exp->get_repr() << endl;  // ret 0
+  if (is_ret) {
+    cout << "\n  // return stmt" << endl;
+    // ret exp
+    exp->Eval();
+    exp->Dump();
+    
+    cout << "  ret " << exp->get_repr() << endl;  // exp repr is reg name
+  } else {
+    cout << "\n  // assign stmt" << endl;
+    // lval = exp
+    lval->Eval();
+    lval->Dump();
+    exp->Eval();
+    exp->Dump();
+
+    // exp repr is reg, lval repr is addr
+    // cast lval to LValAST
+    auto lval_ast = dynamic_cast<LValAST*>(lval.get());
+    cout << "  store " << exp->get_repr() << ", " << lval_ast->mem_addr << endl;
+  }
 }
 
-// if number than return val, else return tmp var
-string ExpBaseAST::get_repr() {
-  if (is_number) {
-    return to_string(val);
-  } else {
-    return "%" + to_string(addr);
+void VarDeclAST::Dump() {
+  for (auto& def : def_list->vec) {
+    def->Dump();
   }
+}
+
+void VarDefAST::Dump() {
+  cout << "  " << mem_addr << " = alloc i32" << endl;
+  if (has_init) {
+    init->Eval();
+    init->Dump();
+    // todo only father knows whether is i32
+    cout << "  " << "store " << init->get_repr() << ", " << mem_addr << endl; 
+  }
+}
+
+void InitValAST::Dump() {
+  exp->Dump();
+}
+
+void InitValAST::Eval() {
+  if (evaluated) return;
+  
+  exp->Eval();
+  CopyInfo(exp);
+  
+  if (!is_const) evaluated = true;
 }
 
 void ExpAST::Dump() {
@@ -113,11 +145,19 @@ void ExpAST::Eval() {
 void UnaryAST::Dump() {
   if (op == "") {
     primary->Dump();
-  } else {
-    unary->Dump();
-    // todo currently delete calculation
-    // code can be recovered in git commit before lv4
-    cout << "  // " << op << " " << unary->val << " no dump" << endl;
+    return;
+  }
+
+  unary->Dump();
+  if (is_number)
+    cout << "  // " << op << " " << unary->val << " is_number=true" << endl;
+  else {
+    // if (op == "+"): do nothing
+    if (op == "-") {
+      cout << "  " << get_repr() << " = sub 0, " << unary->get_repr() << endl;
+    } else if (op == "!") {
+      cout << "  " << get_repr() << " = eq " << unary->get_repr() << ", 0" << endl;
+    }
   }
 }
 
@@ -132,31 +172,28 @@ void UnaryAST::Eval() {
     // unary -> + primary (do nothing)
     unary->Eval();
     CopyInfo(unary);
-  } else if (op == "-") {
+  } else {
     unary->Eval();
-    if (unary->is_number) {
-      is_number = true;
-      val = -unary->val;
+
+    is_number = unary->is_number;
+    is_const = unary->is_const;
+    if (is_number) {
+      if (op == "-") {
+        val = -unary->val;
+      } else if (op == "!") {
+        val = !unary->val;
+      }
     } else {
-      assert(false);
-    }
-  } else if (op == "!") {
-    unary->Eval();
-    if (unary->is_number) {
-      is_number = true;
-      is_const = unary->is_const;
-      val = !unary->val;
-    } else {
-      assert(false);
+      NewTempVar();
     }
   }
-
   if (!is_const) evaluated = true;
 }
 
 void PrimaryAST::Dump() {
-  if (!is_number) {
-    printf("error: primary is not number\n");
+  if (is_lval) {
+    lval->Dump();
+  } else if (is_exp) {
     exp->Dump();
   }
 }
@@ -164,20 +201,46 @@ void PrimaryAST::Dump() {
 void PrimaryAST::Eval() {
   if (evaluated) return;
 
-  // number case is already evaluated
-  if (is_lval) {
-    // todo currently lval will only be const and number
-    is_const = true;
-    is_number = true;
-    evaluated = true;
-    val = lval->val;
-    addr = lval->addr;
-  }
-  if (!is_number) {
-    // this should not be reached, because all exp will be const number
-    printf("error: primary is not number\n");
+  // number case is already evaluated when initializing
+  if (is_lval) {  // case: lval
+    lval->Eval();
+    CopyInfo(lval);
+  } else if (is_exp) {  // case: exp
     exp->Eval();
     CopyInfo(exp);
+  }
+
+  if (!is_const) evaluated = true;
+}
+
+void LValAST::Dump() {
+  if (!is_number) {
+    // if const: just print the number
+    // todo currently we do not consider optimization when lval is a inconstant number
+    if (!at_left) {
+      // %0 = load @x
+      cout << "  " << get_repr() << " = load " << mem_addr << endl;
+    }
+  } else {
+    cout << "  // " << val << " is_number=true" << endl;
+  }
+}
+
+void LValAST::Eval() {
+  if (evaluated) return;
+
+  if (sym.index() == 0) {
+    // int
+    is_number = true;
+    val = get<int>(sym);
+    assert(!at_left);  // must be a variable and has string
+  } else if (sym.index() == 1) {
+    // string
+    mem_addr = get<string>(sym);
+    if (!at_left)
+      addr = NewTempVar();
+  } else {
+    assert(false);
   }
 
   if (!is_const) evaluated = true;
@@ -186,13 +249,26 @@ void PrimaryAST::Eval() {
 void MulAST::Dump() {
   if (op == "") {
     unary->Dump();
-  } else {
-    mul->Dump();
-    unary->Dump();
+    return;
+  }
 
-    // todo currently delete calculation
-    // code can be recovered in git commit before lv4
-    cout << "  // " << mul->val << " " << op << " " << unary->val << " no dump" << endl;
+  // else
+  mul->Dump();
+  unary->Dump();
+
+  if (is_number) {
+    cout << "  // " << mul->val << " " << op << " " << unary->val << " is_number=true" << endl;
+  } else {  // not number, calculate with reg addr
+    if (op == "*") {
+      cout << "  " << get_repr() << " = mul " << mul->get_repr() << ", "
+          << unary->get_repr() << endl;
+    } else if (op == "/") {
+      cout << "  " << get_repr() << " = div " << mul->get_repr() << ", "
+          << unary->get_repr() << endl;
+    } else if (op == "%") {
+      cout << "  " << get_repr() << " = mod " << mul->get_repr() << ", "
+          << unary->get_repr() << endl;
+    }
   }
 }
 
@@ -208,14 +284,19 @@ void MulAST::Eval() {
     mul->Eval();
     unary->Eval();
 
-    is_number = true;
+    is_number = mul->is_number && unary->is_number;
     is_const = mul->is_const && unary->is_const;
-    if (op == "*") {
-      val = mul->val * unary->val;
-    } else if (op == "/") {
-      val = mul->val / unary->val;
-    } else if (op == "%") {
-      val = mul->val % unary->val;
+    if (is_number) {
+      if (op == "*") {
+        val = mul->val * unary->val;
+      } else if (op == "/") {
+        val = mul->val / unary->val;
+      } else if (op == "%") {
+        val = mul->val % unary->val;
+      }
+    } else {
+      // create new tmp var
+      addr = NewTempVar();
     }
   }
 
@@ -225,13 +306,23 @@ void MulAST::Eval() {
 void AddAST::Dump() {
   if (op == "") {
     mul->Dump();
-  } else {
-    add->Dump();
-    mul->Dump();
+    return;
+  }
+  
+  // else
+  add->Dump();
+  mul->Dump();
 
-    // todo currently delete calculation
-    // code can be recovered in git commit before lv4
-    cout << "  // " << add->val << " " << op << " " << mul->val << " no dump" << endl;
+  if (is_number)
+    cout << "  // " << add->val << " " << op << " " << mul->val << " is_number=true" << endl;
+  else {
+    if (op == "+") {
+      cout << "  " << get_repr() << " = add " << add->get_repr() << ", "
+           << mul->get_repr() << endl;
+    } else if (op == "-") {
+      cout << "  " << get_repr() << " = sub " << add->get_repr() << ", "
+           << mul->get_repr() << endl;
+    }
   }
 }
 
@@ -247,12 +338,17 @@ void AddAST::Eval() {
     add->Eval();
     mul->Eval();
 
-    is_number = true;
+    is_number = add->is_number && mul->is_number;
     is_const = add->is_const && mul->is_const;
-    if (op == "+") {
-      val = add->val + mul->val;
-    } else if (op == "-") {
-      val = add->val - mul->val;
+    if (is_number) {
+      if (op == "+") {
+        val = add->val + mul->val;
+      } else if (op == "-") {
+        val = add->val - mul->val;
+      }
+    } else {
+      // create new tmp var
+      addr = NewTempVar();
     }
   }
   
@@ -262,13 +358,23 @@ void AddAST::Eval() {
 void RelAST::Dump() {
   if (op == "") {
     add->Dump();
-  } else {
-    rel->Dump();
-    add->Dump();
+    return;
+  }
+  rel->Dump();
+  add->Dump();
 
-    // todo currently delete calculation
-    // code can be recovered in git commit before lv4
+  if (is_number)
     cout << "  // " << rel->val << " " << op << " " << add->val << " no dump" << endl;
+  else {
+    if (op == "<") {
+      cout << "  " << get_repr() << " = lt " << rel->get_repr() << ", " << add->get_repr() << endl;
+    } else if (op == ">") {
+      cout << "  " << get_repr() << " = gt " << rel->get_repr() << ", " << add->get_repr() << endl;
+    } else if (op == "<=") {
+      cout << "  " << get_repr() << " = le " << rel->get_repr() << ", " << add->get_repr() << endl;
+    } else if (op == ">=") {
+      cout << "  " << get_repr() << " = ge " << rel->get_repr() << ", " << add->get_repr() << endl;
+    }
   }
 }
 
@@ -284,32 +390,43 @@ void RelAST::Eval() {
     rel->Eval();
     add->Eval();
 
-    is_number = true;
+    is_number = rel->is_number && add->is_number;
     is_const = rel->is_const && add->is_const;
-    if (op == "<") {
-      val = rel->val < add->val;
-    } else if (op == ">") {
-      val = rel->val > add->val;
-    } else if (op == "<=") {
-      val = rel->val <= add->val;
-    } else if (op == ">=") {
-      val = rel->val >= add->val;
+    if (is_number) {
+      if (op == "<") {
+        val = rel->val < add->val;
+      } else if (op == ">") {
+        val = rel->val > add->val;
+      } else if (op == "<=") {
+        val = rel->val <= add->val;
+      } else if (op == ">=") {
+        val = rel->val >= add->val;
+      }
+    } else {
+      // create new tmp var
+      addr = NewTempVar();
     }
   }
-  
+
   if (!is_const) evaluated = true;
 }
 
 void EqAST::Dump() {
   if (op == "") {
     rel->Dump();
-  } else {
-    eq->Dump();
-    rel->Dump();
+    return;
+  }
+  eq->Dump();
+  rel->Dump();
 
-    // todo currently delete calculation
-    // code can be recovered in git commit before lv4
+  if (is_number)
     cout << "  // " << eq->val << " " << op << " " << rel->val << " no dump" << endl;
+  else {
+    if (op == "==") {
+      cout << "  " << get_repr() << " = eq " << eq->get_repr() << ", " << rel->get_repr() << endl;
+    } else if (op == "!=") {
+      cout << "  " << get_repr() << " = ne " << eq->get_repr() << ", " << rel->get_repr() << endl;
+    }
   }
 }
 
@@ -325,12 +442,17 @@ void EqAST::Eval() {
     eq->Eval();
     rel->Eval();
 
-    is_number = true;
+    is_number = eq->is_number && rel->is_number;
     is_const = eq->is_const && rel->is_const;
-    if (op == "==") {
-      val = eq->val == rel->val;
-    } else if (op == "!=") {
-      val = eq->val != rel->val;
+    if (is_number) {
+      if (op == "==") {
+        val = eq->val == rel->val;
+      } else if (op == "!=") {
+        val = eq->val != rel->val;
+      }
+    } else {
+      // create new tmp var
+      addr = NewTempVar();
     }
   }
   
@@ -340,13 +462,27 @@ void EqAST::Eval() {
 void LAndAST::Dump() {
   if (is_single) {
     eq->Dump();
-  } else {
-    land->Dump();
-    eq->Dump();
-
-    // todo currently delete calculation
-    // code can be recovered in git commit before lv4
+    return;
+  }
+  land->Dump();
+  eq->Dump();
+  if (is_number)
     cout << "  // " << land->val << " && " << eq->val << " no dump" << endl;
+  else {
+    land->Dump();
+    // check if land is 0
+    int land_tmp = tmp_var_no++;
+    cout << "  %" << land_tmp << " = eq " << land->get_repr() << ", 0" << endl;
+
+    eq->Dump();
+    // check if eq is 0
+    int eq_tmp = tmp_var_no++;
+    cout << "  %" << eq_tmp << " = eq " << eq->get_repr() << ", 0" << endl;
+
+    // create tmp and flip on tmp
+    int tmp_addr = tmp_var_no++;
+    cout << "  %" << tmp_addr << " = or %" << land_tmp << ", %" << eq_tmp << endl;
+    cout << "  " << get_repr() << " = eq %" << tmp_addr << ", 0 " << endl;
   }
 }
 
@@ -362,9 +498,14 @@ void LAndAST::Eval() {
     land->Eval();
     eq->Eval();
 
-    is_number = true;
+    is_number = land->is_number && eq->is_number;
     is_const = land->is_const && eq->is_const;
-    val = land->val && eq->val;
+    if (is_number) {
+      val = land->val && eq->val;
+    } else {
+      // create new tmp var
+      addr = NewTempVar();
+    }
   }
   
   if (!is_const) evaluated = true;
@@ -373,13 +514,27 @@ void LAndAST::Eval() {
 void LOrAST::Dump() {
   if (is_single) {
     land->Dump();
-  } else {
-    lor->Dump();
-    land->Dump();
-    
-    // todo currently delete calculation
-    // code can be recovered in git commit before lv4
+    return;
+  }
+  lor->Dump();
+  land->Dump();
+  if (is_number)
     cout << "  // " << lor->val << " || " << land->val << " no dump" << endl;
+  else {
+    lor->Dump();
+    // check if lor is 0
+    int lor_tmp = tmp_var_no++;
+    cout << "  %" << lor_tmp << " = eq " << lor->get_repr() << ", 0" << endl;
+
+    land->Dump();
+    // check if land is 0
+    int land_tmp = tmp_var_no++;
+    cout << "  %" << land_tmp << " = eq " << land->get_repr() << ", 0" << endl;
+
+    // create tmp and flip on tmp
+    int tmp_addr = tmp_var_no++;
+    cout << "  %" << tmp_addr << " = and %" << lor_tmp << ", %" << land_tmp << endl;
+    cout << "  " << get_repr() << " = eq %" << tmp_addr << ", 0 " << endl;
   }
 }
 
@@ -395,9 +550,14 @@ void LOrAST::Eval() {
     lor->Eval();
     land->Eval();
 
-    is_number = true;
+    is_number = lor->is_number && land->is_number;
     is_const = lor->is_const && land->is_const;
-    val = lor->val || land->val;
+    if (is_number) {
+      val = lor->val || land->val;
+    } else {
+      // create new tmp var
+      addr = NewTempVar();
+    }
   }
   
   if (!is_const) evaluated = true;
