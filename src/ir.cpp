@@ -1,15 +1,20 @@
 #include <ir.hpp>
 #include <map>
+#include <cmath>
 
+using namespace std;
+
+// some global variables
+int stack_size = 0;  // stack length
 int reg_cnt = 0;
 int int_reg_cnt = 0;  // int_reg will be cleaned after visiting a value
 
-std::string format_reg(int reg_num) {
-  std::string reg_str;
+string format_reg(int reg_num) {
+  string reg_str;
   if (reg_num < 7) {  // t0 ~ t6
-    reg_str = "t" + std::to_string(reg_num);
+    reg_str = "t" + to_string(reg_num);
   } else if (reg_num < 15) {  // a0 ~ a7
-    reg_str = "a" + std::to_string(reg_num - 7);
+    reg_str = "a" + to_string(reg_num - 7);
   } else {
     assert(false);
   }
@@ -18,9 +23,9 @@ std::string format_reg(int reg_num) {
 
 // must use a value map, so when referred to a value pointer
 // it won't be dump twice
-std::map<const koopa_raw_value_t, std::string> vmap;
+map<const koopa_raw_value_t, string> vmap;
 
-std::string get_op_str(koopa_raw_binary_op_t op) {
+string get_op_str(koopa_raw_binary_op_t op) {
   switch (op) {
     case KOOPA_RBO_ADD:
       return "add";
@@ -45,7 +50,7 @@ std::string get_op_str(koopa_raw_binary_op_t op) {
   }
 }
 
-void gen_riscv(std::string koopa_str) {
+void gen_riscv(string koopa_str) {
   printf("%s\n", koopa_str.c_str());
   koopa_program_t program;
   koopa_error_code_t ret = koopa_parse_from_string(koopa_str.c_str(), &program);
@@ -67,8 +72,8 @@ void Visit(const koopa_raw_program_t &program) {
 
   Visit(program.values);
 
-  std::cout << "  .text" << std::endl;
-  std::cout << "  .globl main" << std::endl;
+  cout << "  .text" << endl;
+  cout << "  .globl main" << endl;
   Visit(program.funcs);
 }
 
@@ -96,7 +101,24 @@ void Visit(const koopa_raw_slice_t &slice) {
 // visit func
 void Visit(const koopa_raw_function_t &func) {
   printf("visit func\n");
-  std::cout << func->name + 1 << ":" << std::endl;
+  cout << func->name + 1 << ":" << endl;
+  // get stack size
+  for (size_t i = 0; i < func->bbs.len; ++i) {
+    koopa_raw_basic_block_t bb_ptr = reinterpret_cast<koopa_raw_basic_block_t>(func->bbs.buffer[i]);
+    for (size_t j = 0; j < bb_ptr->insts.len; ++j) {
+      koopa_raw_value_t inst_ptr = reinterpret_cast<koopa_raw_value_t>(bb_ptr->insts.buffer[j]);
+      if (inst_ptr->ty->tag != KOOPA_RTT_UNIT)
+        // only value with return is counted
+        stack_size += 4;
+    }
+  }
+  stack_size = ceil(stack_size / 16.0) * 16;
+  if (stack_size <= 2048)
+    cout << "  addi sp, sp, " << to_string(-stack_size) << endl;
+  else {
+    cout << "  li t0, " << to_string(-stack_size) << endl;
+    cout << "  addi sp, sp, t0" << endl;
+  }
   // visit all basic blocks
   Visit(func->bbs);
 }
@@ -108,14 +130,14 @@ void Visit(const koopa_raw_basic_block_t &bb) {
 }
 
 // visit value
-std::string Visit(const koopa_raw_value_t &value) {
+string Visit(const koopa_raw_value_t &value) {
   if (vmap[value] != "") {
     return vmap[value];
   }
 
   printf("visit value\n");
   const auto &kind = value->kind;
-  std::string reg;
+  string reg;
   switch (kind.tag) {
     case KOOPA_RVT_RETURN:
       // 访问 return 指令
@@ -140,34 +162,34 @@ std::string Visit(const koopa_raw_value_t &value) {
 // visit return
 void Visit(const koopa_raw_return_t &ret) {
   printf("visit return\n");
-  std::string reg = Visit(ret.value);
-  std::cout << "  # ret" << std::endl;
-  std::cout << "  mv a0, " << reg << std::endl;
-  std::cout << "  ret" << std::endl;
+  string reg = Visit(ret.value);
+  cout << "  # ret" << endl;
+  cout << "  mv a0, " << reg << endl;
+  cout << "  ret" << endl;
 }
 
 // visit integer
-std::string Visit(const koopa_raw_integer_t &integer) {
+string Visit(const koopa_raw_integer_t &integer) {
   printf("visit integer\n");
   if (integer.value == 0)
     return "x0";
-  std::string reg = format_reg(int_reg_cnt++);
-  std::cout << "  # li integer" << std::endl;
-  std::cout << "  " << "li " << reg << ", " << integer.value << std::endl;
+  string reg = format_reg(int_reg_cnt++);
+  cout << "  # li integer" << endl;
+  cout << "  " << "li " << reg << ", " << integer.value << endl;
   return reg;
 }
 
 // visit binary expression
-std::string Visit(const koopa_raw_binary_t &binary) {
+string Visit(const koopa_raw_binary_t &binary) {
   printf("visit binary\n");
   koopa_raw_binary_op_t op = binary.op;
   // assume: only int will assign new reg when Visit(koopa_value)
   int_reg_cnt = reg_cnt;
-  std::string left = Visit(binary.lhs);
-  std::string right = Visit(binary.rhs);
+  string left = Visit(binary.lhs);
+  string right = Visit(binary.rhs);
   int_reg_cnt = reg_cnt;  // restore int_reg_cnt
-  std::string reg = format_reg(reg_cnt++);
-  std::string op_str;
+  string reg = format_reg(reg_cnt++);
+  string op_str;
   
   switch (op) {
     case KOOPA_RBO_ADD:  // add
@@ -180,25 +202,25 @@ std::string Visit(const koopa_raw_binary_t &binary) {
     case KOOPA_RBO_OR:   // or
     case KOOPA_RBO_GT:   // sgt
       op_str = get_op_str(op);
-      std::cout << "  # " << op_str << std::endl;
-      std::cout << "  " << op_str << " " << reg << ", " << left << ", " << right << std::endl;
+      cout << "  # " << op_str << endl;
+      cout << "  " << op_str << " " << reg << ", " << left << ", " << right << endl;
       break;
     case KOOPA_RBO_EQ:  // eq
-      std::cout << "  # eq" << std::endl;
-      std::cout << "  xor " << reg << ", " << left << ", " << right << std::endl;
-      std::cout << "  seqz " << reg << ", " << reg << std::endl;
+      cout << "  # eq" << endl;
+      cout << "  xor " << reg << ", " << left << ", " << right << endl;
+      cout << "  seqz " << reg << ", " << reg << endl;
       break;
     case KOOPA_RBO_NOT_EQ:  // neq
-      std::cout << "  xor " << reg << ", " << left << ", " << right << std::endl;
-      std::cout << "  snez " << reg << ", " << reg << std::endl;
+      cout << "  xor " << reg << ", " << left << ", " << right << endl;
+      cout << "  snez " << reg << ", " << reg << endl;
       break;
     case KOOPA_RBO_LE:  // le
-      std::cout << "  sgt " << reg << ", " << left << ", " << right << std::endl;
-      std::cout << "  xori " << reg << ", " << reg << ", 1" << std::endl; 
+      cout << "  sgt " << reg << ", " << left << ", " << right << endl;
+      cout << "  xori " << reg << ", " << reg << ", 1" << endl; 
       break;
     case KOOPA_RBO_GE:  // ge
-      std::cout << "  slt " << reg << ", " << left << ", " << right << std::endl;
-      std::cout << "  xori " << reg << ", " << reg << ", 1" << std::endl; 
+      cout << "  slt " << reg << ", " << left << ", " << right << endl;
+      cout << "  xori " << reg << ", " << reg << ", 1" << endl; 
       break;
     default:
       assert(false);
