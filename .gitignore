@@ -4,6 +4,9 @@
 
 
 /testcases
-test.c
+/test
+/test.o
+/test.s
+/test.c
 *.koopa
 *.s
