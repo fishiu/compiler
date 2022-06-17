@@ -47,8 +47,10 @@ using namespace std;
 %token <str_val> RELOP EQOP ANDOP OROP
 
 // 非终结符的类型定义
-%type <ast_val> FuncDef FuncType Decl ConstDecl ConstDef VarDecl VarDef Block BlockItem Stmt BType
-%type <exp_ast_val> ConstExp ConstInitVal InitVal Exp UnaryExp PrimaryExp LVal AddExp MulExp RelExp EqExp LAndExp LOrExp
+%type <ast_val> FuncDef FuncType Decl ConstDecl ConstDef VarDecl VarDef Block
+%type <ast_val> BlockItem Stmt BType
+%type <exp_ast_val> ConstExp ConstInitVal InitVal Exp UnaryExp PrimaryExp LVal
+%type <exp_ast_val> AddExp MulExp RelExp EqExp LAndExp LOrExp
 %type <int_val> Number
 %type <str_val> UnaryOp
 %type <vec_val> BlockItemList ConstDefList VarDefList
