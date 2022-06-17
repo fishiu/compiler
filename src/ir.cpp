@@ -360,18 +360,16 @@ repr_t Visit(const koopa_raw_binary_t &binary) {
 repr_t Visit(const koopa_raw_load_t &load) {
   printf("visit load\n");
   koopa_raw_value_t src = load.src;
-  repr_t dest = {true, reg_allocator.alloc().regid};
   // save the load value in reg, ready to return
   repr_t src_repr = Visit(src);
   
   assert(src_repr.is_reg);
-  string reg_name = format_reg(dest.addr);
   string src_reg_name = format_reg(src_repr.addr);
 
   // store the reg content into stack
-  dest = {false, stack.get_top()};
+  repr_t dest = {false, stack.get_top()};
   stack.inc_top(4);
-  cout << "  sw " << reg_name << ", " << dest.addr << "(sp)" << endl;
+  cout << "  sw " << src_reg_name << ", " << dest.addr << "(sp)" << endl;
 
   return dest;
 }
