@@ -22,15 +22,17 @@ class FuncTypeAST;
 class BlockAST;
 class BlockItemAST;
 class StmtAST;
+class AssignAST;  // Another StmtAST
+class RetAST;     // Another StmtAST
 class DeclAST;
 class ConstDeclAST;
 class VarDeclAST;
 class BTypeAST;
-class ConstDefAST;  // expbase
-class VarDefAST;    // expbase
+class ConstDefAST;      // expbase
+class VarDefAST;        // expbase
 class ConstInitValAST;  // expbase
-class ConstExpAST;  // expbase
-class InitValAST;  // expbase
+class ConstExpAST;      // expbase
+class InitValAST;       // expbase
 
 class ExpAST;
 class UnaryAST;
@@ -149,15 +151,36 @@ class BlockItemAST : public BaseAST {
 
 class StmtAST : public BaseAST {
  public:
-  unique_ptr<ExpBaseAST> exp;  // return exp
-  unique_ptr<ExpBaseAST> lval; // lval = exp
-  bool is_ret = false;
+  unique_ptr<ExpBaseAST> exp;
+  bool has_exp = false;
 
-  StmtAST(unique_ptr<ExpBaseAST>& exp) : exp(move(exp)), is_ret(true) {}
-  StmtAST(unique_ptr<ExpBaseAST>& lval, unique_ptr<ExpBaseAST>& exp)
-      : exp(move(exp)), lval(move(lval)) {}
+  StmtAST() {}
+  StmtAST(unique_ptr<ExpBaseAST>& exp) : exp(move(exp)), has_exp(true) {}
   virtual void Dump() override;
 };
+
+// Another StmtAST
+class AssignAST : public BaseAST {
+ public:
+  unique_ptr<ExpBaseAST> lval;
+  unique_ptr<ExpBaseAST> exp;
+
+  AssignAST(unique_ptr<ExpBaseAST>& lval, unique_ptr<ExpBaseAST>& exp)
+      : lval(move(lval)), exp(move(exp)) {}
+  virtual void Dump() override;
+};
+
+// Another StmtAST
+class RetAST : public BaseAST {
+ public:
+  unique_ptr<ExpBaseAST> exp;
+  bool has_exp = false;
+
+  RetAST() {}
+  RetAST(unique_ptr<ExpBaseAST>& exp) : exp(move(exp)), has_exp(true) {}
+  virtual void Dump() override;
+};
+
 
 class DeclAST : public BaseAST {
  public:
@@ -192,11 +215,7 @@ class ConstDefAST : public BaseAST {
   unique_ptr<ExpBaseAST> init;  // init value
 
   ConstDefAST(unique_ptr<string>& ident_, unique_ptr<ExpBaseAST>& init_)
-      : ident(move(ident_)), init(move(init_)) {
-    init->Eval();  // evaluate
-    assert(init->is_number && init->is_const);
-    symtab.Insert(ident, init->val);
-  }
+      : ident(move(ident_)), init(move(init_)) {}
   virtual void Dump() override;
 };
 
@@ -235,15 +254,10 @@ class VarDefAST : public BaseAST {
   string mem_addr;
   bool has_init;
 
-  VarDefAST(unique_ptr<string>& ident_) : ident(move(ident_)), has_init(false) {
-    // no init
-    mem_addr = symtab.Insert(ident);
-  }
+  VarDefAST(unique_ptr<string>& ident_) : ident(move(ident_)), has_init(false) {}
 
   VarDefAST(unique_ptr<string>& ident_, unique_ptr<ExpBaseAST>& init_)
-      : ident(move(ident_)), init(move(init_)), has_init(true) {
-    mem_addr = symtab.Insert(ident);
-  }
+      : ident(move(ident_)), init(move(init_)), has_init(true) {}
 
   virtual void Dump() override;
 };
@@ -325,9 +339,7 @@ class LValAST : public ExpBaseAST {
   string mem_addr;  // address in memory
   bool at_left;
 
-  LValAST(unique_ptr<string>& ident_) : ident(move(ident_)) {
-    sym = symtab.Lookup(ident);
-  }
+  LValAST(unique_ptr<string>& ident_) : ident(move(ident_)) {}
   virtual void Dump() override;
   virtual void Eval() override;
 };

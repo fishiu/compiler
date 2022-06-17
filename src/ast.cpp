@@ -7,7 +7,7 @@ void CompUnitAST::Dump() { func_def->Dump(); }
 void FuncDefAST::Dump() {
   cout << "fun @" << ident << "(): ";
   func_type->Dump();
-  cout << " {" << endl;
+  cout << " {" << endl << "\%entry:" << endl;
   block->Dump();
   cout << "}";
 }
@@ -19,10 +19,10 @@ void FuncTypeAST::Dump() {
 }
 
 void BlockAST::Dump() {
-  cout << "\%entry:" << endl;
-  for (auto& item : blocks->vec) {
+  symtab_stack.Push();
+  for (auto& item : blocks->vec)
     item->Dump();
-  }
+  symtab_stack.Pop();
 }
 
 void BlockItemAST::Dump() {
@@ -41,8 +41,9 @@ void ConstDeclAST::Dump() {
 }
 
 void ConstDefAST::Dump() {
-  init->Eval();
-  // todo current dump nothing, becuase def do not need ir
+  init->Eval();  // evaluate
+  assert(init->is_number && init->is_const);
+  symtab_stack.Insert(ident, init->val);
   init->Dump();
   cout << "  // const def " << *ident << " = " << init->val << endl;
 }
@@ -78,35 +79,45 @@ void ConstExpAST::Eval() {
 }
 
 void StmtAST::Dump() {
-  if (is_ret) {
-    cout << "\n  // return stmt" << endl;
-    // ret exp
+  cout << "\n  // stmt(exp)" << endl;
+  if (has_exp) {
     exp->Eval();
     exp->Dump();
-    
-    cout << "  ret " << exp->get_repr() << endl;  // exp repr is reg name
-  } else {
-    cout << "\n  // assign stmt" << endl;
-    // lval = exp
-    lval->Eval();
-    lval->Dump();
-    exp->Eval();
-    exp->Dump();
+  }
+}
 
-    // exp repr is reg, lval repr is addr
-    // cast lval to LValAST
-    auto lval_ast = dynamic_cast<LValAST*>(lval.get());
-    cout << "  store " << exp->get_repr() << ", " << lval_ast->mem_addr << endl;
+void AssignAST::Dump() {
+  cout << "\n  // assign stmt" << endl;
+  // lval = exp
+  lval->Eval();
+  lval->Dump();
+  exp->Eval();
+  exp->Dump();
+
+  // exp repr is reg, lval repr is addr
+  // cast lval to LValAST
+  auto lval_ast = dynamic_cast<LValAST*>(lval.get());
+  cout << "  store " << exp->get_repr() << ", " << lval_ast->mem_addr << endl;
+}
+
+void RetAST::Dump() {
+  cout << "\n  // return stmt" << endl;
+  if (has_exp) {
+    exp->Eval();
+    exp->Dump();
+    cout << "  ret " << exp->get_repr() << endl;
+  } else {
+    cout << "  ret" << endl;
   }
 }
 
 void VarDeclAST::Dump() {
-  for (auto& def : def_list->vec) {
+  for (auto& def : def_list->vec)
     def->Dump();
-  }
 }
 
 void VarDefAST::Dump() {
+  mem_addr = symtab_stack.Insert(ident);
   cout << "  " << mem_addr << " = alloc i32" << endl;
   if (has_init) {
     init->Eval();
@@ -229,6 +240,7 @@ void LValAST::Dump() {
 void LValAST::Eval() {
   if (evaluated) return;
 
+  sym = symtab_stack.Lookup(ident);
   if (sym.index() == 0) {
     // int
     is_number = true;

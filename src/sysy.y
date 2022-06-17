@@ -105,10 +105,8 @@ Block
   }
 
 BlockItemList
-  : BlockItem {
+  : {
     auto vec = new VecAST();
-    auto block_item = unique_ptr<BaseAST>($1);
-    vec->push_back(block_item);
     $$ = vec;
   }
   | BlockItemList BlockItem {
@@ -259,7 +257,12 @@ Stmt
   : RETURN Exp ';' {
     printf("Stmt -> return Exp\n");
     auto exp = unique_ptr<ExpBaseAST>($2);
-    auto ast = new StmtAST(exp);
+    auto ast = new RetAST(exp);
+    $$ = ast;
+  }
+  | RETURN ';' {
+    printf("Stmt -> return\n");
+    auto ast = new RetAST();
     $$ = ast;
   }
   | LVal '=' Exp ';' {
@@ -270,7 +273,23 @@ Stmt
     auto lval_ast = static_cast<LValAST*>(lval.get());
     lval_ast->at_left = true;
     auto exp = unique_ptr<ExpBaseAST>($3);
-    auto ast = new StmtAST(lval, exp);
+    auto ast = new AssignAST(lval, exp);
+    $$ = ast;
+  }
+  | Block {
+    printf("Stmt -> Block\n");
+    // do nothing
+    $$ = $1;
+  }
+  | Exp ';' {
+    printf("Stmt -> Exp;\n");
+    auto exp = unique_ptr<ExpBaseAST>($1);
+    auto ast = new StmtAST(exp);
+    $$ = ast;
+  }
+  | ';' {
+    printf("Stmt -> ;\n");
+    auto ast = new StmtAST();
     $$ = ast;
   }
   ;
