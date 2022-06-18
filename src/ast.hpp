@@ -22,10 +22,12 @@ class FuncTypeAST;
 class BlockAST;
 class BlockItemAST;
 class StmtAST;
-class AssignAST;  // Another StmtAST
-class RetAST;     // Another StmtAST
-class IfAST;      // Another StmtAST
-class WhileAST;   // Another StmtAST
+class AssignAST;    // Another StmtAST
+class RetAST;       // Another StmtAST
+class IfAST;        // Another StmtAST
+class WhileAST;     // Another StmtAST
+class BreakAST;     // Another StmtAST
+class ContinueAST;  // Another StmtAST
 class DeclAST;
 class ConstDeclAST;
 class VarDeclAST;
@@ -206,6 +208,16 @@ class WhileAST : public BaseAST {
 
   WhileAST(unique_ptr<ExpBaseAST>& cond, unique_ptr<BaseAST>& stmt)
       : cond(move(cond)), body(move(stmt)) {}
+  virtual void Dump() override;
+};
+
+class BreakAST : public BaseAST {
+ public:
+  virtual void Dump() override;
+};
+
+class ContinueAST : public BaseAST {
+ public:
   virtual void Dump() override;
 };
 

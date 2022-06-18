@@ -3,13 +3,13 @@
 
 int label_cnt = 0;
 int ret_label_cnt = 0;
-int while_label_cnt = 0;
 int tmp_var_no = 0;
 string NewTempVar() {
   printf(" [debug] renew tmp var: %d\n", tmp_var_no);
   return "%" + to_string(tmp_var_no++);
 }
 SymTabStack symtab_stack;
+WhileStack while_stack;
 
 // SymTabStack methods
 void SymTabStack::Push() {
@@ -65,4 +65,33 @@ sym_t SymTabStack::Lookup(unique_ptr<string>& symbol) {
     }
   }
   assert(false);
+}
+
+
+// while stack implementations
+labels_t WhileStack::get_label(int i) {
+  // get current while label  
+  string label_entry = "%while_entry_" + to_string(i);
+  string label_body = "%while_body_" + to_string(i);
+  string label_end = "%while_end_" + to_string(i);
+  return make_tuple(label_entry, label_body, label_end);
+}
+
+labels_t WhileStack::Push() {
+  // printf(" [debug] push while#%d\n", cnt);
+  stk.push(cnt);
+  labels_t labels = get_label(cnt);
+  cnt++;
+  
+  return labels;
+}
+
+void WhileStack::Pop() {
+  // printf(" [debug] pop while#%d\n", cnt);
+  stk.pop();
+}
+
+labels_t WhileStack::Top() {
+  labels_t labels = get_label(stk.top());
+  return labels;
 }

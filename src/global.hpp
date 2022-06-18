@@ -6,19 +6,23 @@
 #include <memory>
 #include <variant>
 #include <vector>
+#include <stack>
+#include <tuple>
 
 using namespace std;
 
 typedef variant<int, string> sym_t;
 typedef map<string, sym_t> symtab_t;
+typedef tuple<string, string, string> labels_t;
 class SymTabStack;
+class WhileStack;
 
 extern int label_cnt;
 extern int ret_label_cnt;
-extern int while_label_cnt;
 extern int tmp_var_no;  // current temp variable number
 string NewTempVar();
-extern SymTabStack symtab_stack;  // current temp variable number
+extern SymTabStack symtab_stack;
+extern WhileStack while_stack;    // to maintain multi while
 
 
 // symbol table
@@ -42,6 +46,18 @@ class SymTabStack {
   sym_t Lookup(unique_ptr<string>& symbol);
 
   // ~SymTabStack();
+};
+
+class WhileStack {
+ private:
+  int cnt = 0;
+  stack<int> stk;
+  labels_t get_label(int i);
+
+ public:
+  labels_t Push();
+  void Pop();
+  labels_t Top();  // get current while label
 };
 
 #endif

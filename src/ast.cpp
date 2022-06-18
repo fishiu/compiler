@@ -162,10 +162,10 @@ void IfAST::Dump() {
 
 void WhileAST::Dump() {
   cout << "  // while stmt" << endl;
-  string label_entry = "%while_entry_" + to_string(while_label_cnt);
-  string label_body = "%while_body_" + to_string(while_label_cnt);
-  string label_end = "%while_end_" + to_string(while_label_cnt);
-  while_label_cnt++;
+  labels_t while_labels = while_stack.Push();
+  string label_entry = get<0>(while_labels);
+  string label_body = get<1>(while_labels);
+  string label_end = get<2>(while_labels);
 
   cout << "  jump " << label_entry << endl;
   // entry
@@ -182,6 +182,25 @@ void WhileAST::Dump() {
   // end
   // todo do i need to remove redundant end label?
   cout << endl << label_end << ":" << endl;
+
+  while_stack.Pop();
+}
+
+void BreakAST::Dump() {
+  cout << "  // break stmt" << endl;
+  string label_end = get<2>(while_stack.Top());
+  string break_label = label_end + "_break";
+  cout << "  jump " << label_end << endl;
+  // to avoid empty jump in the rest of WhileAST
+  cout << endl << break_label << ":" << endl;
+}
+
+void ContinueAST::Dump() {
+  cout << "  // continue stmt" << endl;
+  string label_entry = get<0>(while_stack.Top());
+  string continue_label = label_entry + "_continue";
+  cout << "  jump " << label_entry << endl;
+  cout << endl << continue_label << ":" << endl;
 }
 
 void VarDeclAST::Dump() {
