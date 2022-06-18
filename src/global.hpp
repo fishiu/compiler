@@ -13,6 +13,8 @@ typedef variant<int, string> sym_t;
 typedef map<string, sym_t> symtab_t;
 class SymTabStack;
 
+extern int label_cnt;
+extern int ret_label_cnt;
 extern int tmp_var_no;  // current temp variable number
 string NewTempVar();
 extern SymTabStack symtab_stack;  // current temp variable number
@@ -21,7 +23,7 @@ extern SymTabStack symtab_stack;  // current temp variable number
 // symbol table
 class SymTabStack {
  private:
-  int cnt = 0;  // 
+  int cnt = 0;  // global count for symtab, to avoid redifinition in a block
   vector<symtab_t> stk;
  
  public:

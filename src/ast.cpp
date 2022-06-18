@@ -5,10 +5,31 @@ static list<int> tmp_var_list;
 void CompUnitAST::Dump() { func_def->Dump(); }
 
 void FuncDefAST::Dump() {
+  // modify func ir string lines
+  stringstream tmpss;
+  streambuf* old_buf = cout.rdbuf();
+  cout.rdbuf(tmpss.rdbuf());  // redirect to tmpss
+
   cout << "fun @" << ident << "(): ";
   func_type->Dump();
   cout << " {" << endl << "\%entry:" << endl;
   block->Dump();
+
+  // handle last empty ret block
+  string ir = tmpss.str();
+  string lline;  // last line
+  int pt;  // pointer to ir (inverse)
+  for (pt = ir.length() - 2; ir[pt] != '\n'; pt--)
+    // build last line
+    lline = ir[pt] + lline;
+  if (lline.substr(0, 4) == "%ret")
+    // if last line is ret, remove it
+    ir = ir.substr(0, pt + 1);
+  
+  // restore stream
+  cout.rdbuf(old_buf);
+  cout << ir;
+
   cout << "}";
 }
 
@@ -30,7 +51,7 @@ void BlockItemAST::Dump() {
 }
 
 void DeclAST::Dump() {
-  cout << "\n  // decl" << endl;
+  cout << "  // decl" << endl;
   decl->Dump();
 }
 
@@ -79,7 +100,7 @@ void ConstExpAST::Eval() {
 }
 
 void StmtAST::Dump() {
-  cout << "\n  // stmt(exp)" << endl;
+  cout << "  // stmt(exp)" << endl;
   if (has_exp) {
     exp->Eval();
     exp->Dump();
@@ -87,7 +108,7 @@ void StmtAST::Dump() {
 }
 
 void AssignAST::Dump() {
-  cout << "\n  // assign stmt" << endl;
+  cout << "  // assign stmt" << endl;
   // lval = exp
   lval->Eval();
   lval->Dump();
@@ -101,7 +122,7 @@ void AssignAST::Dump() {
 }
 
 void RetAST::Dump() {
-  cout << "\n  // return stmt" << endl;
+  cout << "  // return stmt" << endl;
   if (has_exp) {
     exp->Eval();
     exp->Dump();
@@ -109,6 +130,34 @@ void RetAST::Dump() {
   } else {
     cout << "  ret" << endl;
   }
+  string ret_label = "%ret_" + to_string(ret_label_cnt++);
+  cout << endl << ret_label << ":" << endl;
+}
+
+void IfAST::Dump() {
+  cout << "  // if stmt" << endl;
+  cond->Eval();
+  cond->Dump();
+
+  string label_then = "%then_" + to_string(label_cnt);
+  string label_else = "%else_" + to_string(label_cnt);
+  string label_end = "%end_" + to_string(label_cnt);
+  label_cnt++;
+
+  if (has_else) {
+    cout << "  br " << cond->get_repr() << ", " << label_then << ", " << label_else << endl;
+    cout << endl << label_then << ":" << endl;
+    if_stmt->Dump();
+    cout << "  jump " << label_end << endl;
+    cout << endl << label_else << ":" << endl;
+    else_stmt->Dump();
+  } else {
+    cout << "  br " << cond->get_repr() << ", " << label_then << ", " << label_end << endl;
+    cout << endl << label_then << ":" << endl;
+    if_stmt->Dump();
+  }
+  cout << "  jump " << label_end << endl;
+  cout << endl << label_end << ":" << endl;
 }
 
 void VarDeclAST::Dump() {
@@ -195,7 +244,7 @@ void UnaryAST::Eval() {
         val = !unary->val;
       }
     } else {
-      NewTempVar();
+      addr = NewTempVar();
     }
   }
   if (!is_const) evaluated = true;
@@ -481,20 +530,14 @@ void LAndAST::Dump() {
   if (is_number)
     cout << "  // " << land->val << " && " << eq->val << " no dump" << endl;
   else {
-    land->Dump();
-    // check if land is 0
     int land_tmp = tmp_var_no++;
-    cout << "  %" << land_tmp << " = eq " << land->get_repr() << ", 0" << endl;
-
-    eq->Dump();
-    // check if eq is 0
+    cout << "  %" << land_tmp << " = ne " << land->get_repr() << ", 0" << endl;
+    
     int eq_tmp = tmp_var_no++;
-    cout << "  %" << eq_tmp << " = eq " << eq->get_repr() << ", 0" << endl;
-
-    // create tmp and flip on tmp
-    int tmp_addr = tmp_var_no++;
-    cout << "  %" << tmp_addr << " = or %" << land_tmp << ", %" << eq_tmp << endl;
-    cout << "  " << get_repr() << " = eq %" << tmp_addr << ", 0 " << endl;
+    cout << "  %" << eq_tmp << " = ne " << eq->get_repr() << ", 0" << endl;
+    
+    cout << "  " << get_repr() << " = and %" << land_tmp << ", %" << eq_tmp << endl;
+    // todo tmp_var_no -= 2;
   }
 }
 
@@ -533,20 +576,11 @@ void LOrAST::Dump() {
   if (is_number)
     cout << "  // " << lor->val << " || " << land->val << " no dump" << endl;
   else {
-    lor->Dump();
-    // check if lor is 0
-    int lor_tmp = tmp_var_no++;
-    cout << "  %" << lor_tmp << " = eq " << lor->get_repr() << ", 0" << endl;
-
-    land->Dump();
-    // check if land is 0
-    int land_tmp = tmp_var_no++;
-    cout << "  %" << land_tmp << " = eq " << land->get_repr() << ", 0" << endl;
-
     // create tmp and flip on tmp
     int tmp_addr = tmp_var_no++;
-    cout << "  %" << tmp_addr << " = and %" << lor_tmp << ", %" << land_tmp << endl;
-    cout << "  " << get_repr() << " = eq %" << tmp_addr << ", 0 " << endl;
+    cout << "  %" << tmp_addr << " = or " << lor->get_repr() << ", " << land->get_repr() << endl;
+    cout << "  " << get_repr() << " = ne %" << tmp_addr << ", 0" << endl;
+    // todo tmp_var_no --;
   }
 }
 

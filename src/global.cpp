@@ -1,6 +1,8 @@
 #include <cassert>
 #include <global.hpp>
 
+int label_cnt = 0;
+int ret_label_cnt = 0;
 int tmp_var_no = 0;
 string NewTempVar() {
   printf(" [debug] renew tmp var: %d\n", tmp_var_no);
@@ -19,7 +21,7 @@ void SymTabStack::Pop() {
   printf(" [debug] pop symtab#%d\n", cnt);
   assert(cnt > 0);
   stk.pop_back();
-  cnt--;
+  // cnt--;
 }
 
 void SymTabStack::Insert(unique_ptr<string>& symbol, int value) {

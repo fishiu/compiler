@@ -41,14 +41,14 @@ using namespace std;
 
 // lexer 返回的所有 token 种类的声明
 // 注意 IDENT 和 INT_CONST 会返回 token 的值, 分别对应 str_val 和 int_val
-%token INT RETURN CONST
+%token INT RETURN CONST IF ELSE
 %token <str_val> IDENT
 %token <int_val> INT_CONST
 %token <str_val> RELOP EQOP ANDOP OROP
 
 // 非终结符的类型定义
 %type <ast_val> FuncDef FuncType Decl ConstDecl ConstDef VarDecl VarDef Block
-%type <ast_val> BlockItem Stmt BType
+%type <ast_val> BType BlockItem Stmt ClosedStmt OpenStmt SimpleStmt
 %type <exp_ast_val> ConstExp ConstInitVal InitVal Exp UnaryExp PrimaryExp LVal
 %type <exp_ast_val> AddExp MulExp RelExp EqExp LAndExp LOrExp
 %type <int_val> Number
@@ -57,11 +57,6 @@ using namespace std;
 
 %%
 
-// 开始符, CompUnit ::= FuncDef, 大括号后声明了解析完成后 parser 要做的事情
-// 之前我们定义了 FuncDef 会返回一个 str_val, 也就是字符串指针
-// 而 parser 一旦解析完 CompUnit, 就说明所有的 token 都被解析了, 即解析结束了
-// 此时我们应该把 FuncDef 返回的结果收集起来, 作为 AST 传给调用 parser 的函数
-// $1 指代规则里第一个符号的返回值, 也就是 FuncDef 的返回值
 CompUnit
   : FuncDef {
     auto comp_unit = make_unique<CompUnitAST>();
@@ -70,16 +65,6 @@ CompUnit
   }
   ;
 
-// FuncDef ::= FuncType IDENT '(' ')' Block;
-// 我们这里可以直接写 '(' 和 ')', 因为之前在 lexer 里已经处理了单个字符的情况
-// 解析完成后, 把这些符号的结果收集起来, 然后拼成一个新的字符串, 作为结果返回
-// $$ 表示非终结符的返回值, 我们可以通过给这个符号赋值的方法来返回结果
-// 你可能会问, FuncType, IDENT 之类的结果已经是字符串指针了
-// 为什么还要用 unique_ptr 接住它们, 然后再解引用, 把它们拼成另一个字符串指针呢
-// 因为所有的字符串指针都是我们 new 出来的, new 出来的内存一定要 delete
-// 否则会发生内存泄漏, 而 unique_ptr 这种智能指针可以自动帮我们 delete
-// 虽然此处你看不出用 unique_ptr 和手动 delete 的区别, 但当我们定义了 AST 之后
-// 这种写法会省下很多内存管理的负担
 FuncDef
   : FuncType IDENT '(' ')' Block {
     auto ast = new FuncDefAST();
@@ -90,7 +75,6 @@ FuncDef
   }
   ;
 
-// 同上, 不再解释
 FuncType
   : INT {
     auto ast = new FuncTypeAST();
@@ -256,6 +240,37 @@ InitVal
   ;
 
 Stmt
+  : OpenStmt
+  | ClosedStmt
+  ;
+
+ClosedStmt
+  : SimpleStmt
+  | IF '(' Exp ')' ClosedStmt ELSE ClosedStmt {
+    auto exp = unique_ptr<ExpBaseAST>($3);
+    auto if_stmt = unique_ptr<BaseAST>($5);
+    auto else_stmt = unique_ptr<BaseAST>($7);
+    auto ast = new IfAST(exp, if_stmt, else_stmt);
+    $$ = ast;
+  }
+
+OpenStmt
+  : IF '(' Exp ')' Stmt {
+    auto exp = unique_ptr<ExpBaseAST>($3);
+    auto if_stmt = unique_ptr<BaseAST>($5);
+    auto ast = new IfAST(exp, if_stmt);
+    $$ = ast;
+  }
+  | IF '(' Exp ')' ClosedStmt ELSE OpenStmt {
+    auto exp = unique_ptr<ExpBaseAST>($3);
+    auto if_stmt = unique_ptr<BaseAST>($5);
+    auto else_stmt = unique_ptr<BaseAST>($7);
+    auto ast = new IfAST(exp, if_stmt, else_stmt);
+    $$ = ast;
+  }
+  ;
+
+SimpleStmt
   : RETURN Exp ';' {
     printf("Stmt -> return Exp\n");
     auto exp = unique_ptr<ExpBaseAST>($2);
