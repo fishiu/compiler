@@ -525,23 +525,48 @@ void LAndAST::Dump() {
     eq->Dump();
     return;
   }
+
   land->Dump();
   eq->Dump();
-  if (is_number)
+  if (is_number) {
     cout << "  // " << land->val << " && " << eq->val << " no dump" << endl;
-  else {
-    int land_tmp = tmp_var_no++;
-    cout << "  %" << land_tmp << " = ne " << land->get_repr() << ", 0" << endl;
-    
-    int eq_tmp = tmp_var_no++;
-    cout << "  %" << eq_tmp << " = ne " << eq->get_repr() << ", 0" << endl;
-    
-    cout << "  " << get_repr() << " = and %" << land_tmp << ", %" << eq_tmp << endl;
-    // todo tmp_var_no -= 2;
+  } else {
+    /* short circuit: 
+     * int result = 0;
+     * if (lhs != 0) {
+     *   result = rhs != 0;
+     * }
+     */
+
+    // prepare label for short circuit
+    string label_then = "%then_" + to_string(label_cnt);
+    string label_else = "%else_" + to_string(label_cnt);
+    string label_end = "%end_" + to_string(label_cnt);
+    label_cnt++;
+
+    // create result on stack
+    string result = "%" + to_string(tmp_var_no++);
+    cout << "  " << result << " = alloc i32" << endl;
+    // if lhs != 0 -> label_then, else label_else
+    cout << "  br " << land->get_repr() << ", " << label_then << ", " << label_else << endl;
+    cout << label_then << ":" << endl;
+    string tmp_rhs = "%" + to_string(tmp_var_no++);
+    // result = rhs != 0
+    cout << "  " << tmp_rhs << " = ne " << eq->get_repr() << ", 0" << endl;
+    cout << "  store " << tmp_rhs << ", " << result << endl;
+    cout << "  jump " << label_end << endl;
+    // label else (result = 0)
+    cout << label_else << ":" << endl;
+    cout << "  store 0, " << result << endl;
+    cout << "  jump " << label_end << endl;
+    // label end
+    cout << label_end << ":" << endl;
+    cout << "  " << get_repr() << " = load " << result << endl;
   }
 }
 
 void LAndAST::Eval() {
+  // todo consider short-circuit in eval
   if (evaluated) return;
 
   if (is_single) {
@@ -573,14 +598,39 @@ void LOrAST::Dump() {
   }
   lor->Dump();
   land->Dump();
-  if (is_number)
+  if (is_number) {
     cout << "  // " << lor->val << " || " << land->val << " no dump" << endl;
-  else {
-    // create tmp and flip on tmp
-    int tmp_addr = tmp_var_no++;
-    cout << "  %" << tmp_addr << " = or " << lor->get_repr() << ", " << land->get_repr() << endl;
-    cout << "  " << get_repr() << " = ne %" << tmp_addr << ", 0" << endl;
-    // todo tmp_var_no --;
+  }  else {
+    /* short circuit: 
+     * int result = 1;
+     * if (lhs == 0) {
+     *   result = rhs != 0;
+     * }
+     */
+
+    string label_then = "%then_" + to_string(label_cnt);
+    string label_else = "%else_" + to_string(label_cnt);
+    string label_end = "%end_" + to_string(label_cnt);
+    label_cnt++;
+
+    // create result on stack
+    string result = "%" + to_string(tmp_var_no++);
+    cout << "  " << result << " = alloc i32" << endl;
+    // if lhs == 0 -> label_then, else label_else
+    cout << "  br " << lor->get_repr() << ", " << label_else << ", " << label_then << endl;
+    cout << label_then << ":" << endl;
+    string tmp_rhs = "%" + to_string(tmp_var_no++);
+    // result = rhs != 0
+    cout << "  " << tmp_rhs << " = ne " << land->get_repr() << ", 0" << endl;
+    cout << "  store " << tmp_rhs << ", " << result << endl;
+    cout << "  jump " << label_end << endl;
+    // label else (result = 1)
+    cout << label_else << ":" << endl;
+    cout << "  store 1, " << result << endl;
+    cout << "  jump " << label_end << endl;
+    // label end
+    cout << label_end << ":" << endl;
+    cout << "  " << get_repr() << " = load " << result << endl;
   }
 }
 
