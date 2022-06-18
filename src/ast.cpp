@@ -160,6 +160,30 @@ void IfAST::Dump() {
   cout << endl << label_end << ":" << endl;
 }
 
+void WhileAST::Dump() {
+  cout << "  // while stmt" << endl;
+  string label_entry = "%while_entry_" + to_string(while_label_cnt);
+  string label_body = "%while_body_" + to_string(while_label_cnt);
+  string label_end = "%while_end_" + to_string(while_label_cnt);
+  while_label_cnt++;
+
+  cout << "  jump " << label_entry << endl;
+  // entry
+  cout << endl << label_entry << ":" << endl;
+  cond->Eval();
+  cond->Dump();
+  cout << "  br " << cond->get_repr() << ", " << label_body << ", " << label_end << endl;
+
+  // body
+  cout << endl << label_body << ":" << endl;
+  body->Dump();
+  cout << "  jump " << label_entry << endl;
+
+  // end
+  // todo do i need to remove redundant end label?
+  cout << endl << label_end << ":" << endl;
+}
+
 void VarDeclAST::Dump() {
   for (auto& def : def_list->vec)
     def->Dump();

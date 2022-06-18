@@ -25,6 +25,7 @@ class StmtAST;
 class AssignAST;  // Another StmtAST
 class RetAST;     // Another StmtAST
 class IfAST;      // Another StmtAST
+class WhileAST;   // Another StmtAST
 class DeclAST;
 class ConstDeclAST;
 class VarDeclAST;
@@ -195,6 +196,16 @@ class IfAST : public BaseAST {
         unique_ptr<BaseAST>& else_stmt)
       : cond(move(cond)), if_stmt(move(if_stmt)), else_stmt(move(else_stmt)),
         has_else(true) {}
+  virtual void Dump() override;
+};
+
+class WhileAST : public BaseAST {
+ public:
+  unique_ptr<ExpBaseAST> cond;
+  unique_ptr<BaseAST> body;
+
+  WhileAST(unique_ptr<ExpBaseAST>& cond, unique_ptr<BaseAST>& stmt)
+      : cond(move(cond)), body(move(stmt)) {}
   virtual void Dump() override;
 };
 

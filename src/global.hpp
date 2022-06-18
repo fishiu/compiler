@@ -15,6 +15,7 @@ class SymTabStack;
 
 extern int label_cnt;
 extern int ret_label_cnt;
+extern int while_label_cnt;
 extern int tmp_var_no;  // current temp variable number
 string NewTempVar();
 extern SymTabStack symtab_stack;  // current temp variable number

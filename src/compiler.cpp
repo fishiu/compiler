@@ -32,7 +32,7 @@ int main(int argc, const char *argv[]) {
   streambuf *oldcout = cout.rdbuf(fout.rdbuf());
   if (std::string(mode) == "-koopa") {
     // dump AST
-    cout << "// gen koopa" << endl;
+    // cout << "// gen koopa" << endl;
     ast->Dump();
   } else if (std::string(mode) == "-riscv") {
     // get koopa str
@@ -41,7 +41,7 @@ int main(int argc, const char *argv[]) {
     ast->Dump();
     cout.rdbuf(fout.rdbuf());
   
-    cout << "# gen riscv" << endl;
+    // cout << "# gen riscv" << endl;
     gen_riscv(ss.str());
   }
   cout.rdbuf(oldcout);
