@@ -181,6 +181,8 @@ void Visit(const koopa_raw_function_t &func) {
 // visit basic block
 void Visit(const koopa_raw_basic_block_t &bb) {
   printf("visit bb\n");
+  // +1: remove the starting % of block name
+  cout << bb->name + 1 << ":" << endl;
   Visit(bb->insts);
 }
 
@@ -240,6 +242,12 @@ repr_t Visit(const koopa_raw_value_t &value) {
       cout << "\n  # store" << endl;
       Visit(kind.data.store);
       reg_allocator.free();
+      break;
+    case KOOPA_RVT_BRANCH:
+      Visit(kind.data.branch);
+      break;
+    case KOOPA_RVT_JUMP:
+      Visit(kind.data.jump);
       break;
     default:
       // 其他类型暂时遇不到
@@ -383,5 +391,19 @@ void Visit(const koopa_raw_store_t &store) {
 
   assert(repr.is_reg);
   string reg_name = format_reg(repr.addr);
-  std::cout << "  sw " << reg_name << ", " << dest_repr.addr << "(sp)" << std::endl;
+  cout << "  sw " << reg_name << ", " << dest_repr.addr << "(sp)" << endl;
+}
+
+void Visit(const koopa_raw_branch_t &branch) {
+  string label_true = branch.true_bb->name + 1;
+  string label_false = branch.false_bb->name + 1;
+  repr_t cond_repr = Visit(branch.cond);
+  assert(cond_repr.is_reg);
+  cout << "  bnez " << format_reg(cond_repr.addr) << ", " << label_true << endl;
+  cout << "  j " << label_false << endl;
+}
+
+void Visit(const koopa_raw_jump_t &jump) {
+  string label_target = jump.target->name + 1;
+  cout << "  j " << label_target << endl;
 }
