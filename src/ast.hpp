@@ -19,6 +19,7 @@ class ExpBaseAST;
 class VecAST;
 class FuncDefAST;
 class FuncTypeAST;
+class FuncFParamAST;
 class BlockAST;
 class BlockItemAST;
 class StmtAST;
@@ -48,6 +49,7 @@ class RelAST;
 class EqAST;
 class LAndAST;
 class LorAST;
+class FuncCallAST;
 
 // 所有 AST 的基类
 class BaseAST {
@@ -108,12 +110,12 @@ class ExpBaseAST : public BaseAST {
   }
 };
 
-// CompUnit 是 BaseAST
 class CompUnitAST : public BaseAST {
  public:
-  // 用智能指针管理对象
-  unique_ptr<BaseAST> func_def;
+  unique_ptr<VecAST> func_def_list;
 
+  CompUnitAST(unique_ptr<VecAST>& func_def_list)
+      : func_def_list(move(func_def_list)) {}
   // TODO is there any way to keep const?
   virtual void Dump() override;
 };
@@ -122,10 +124,26 @@ class CompUnitAST : public BaseAST {
 class FuncDefAST : public BaseAST {
  public:
   unique_ptr<BaseAST> func_type;
-  string ident;
+  unique_ptr<string> ident;
+  unique_ptr<VecAST> params;
   unique_ptr<BaseAST> block;
+  bool has_param = false;
+  bool is_void = false;
+
+  // TODO 有空了梳理一下string内存管理
+  FuncDefAST(unique_ptr<BaseAST>& func_type, unique_ptr<string>& ident, unique_ptr<BaseAST>& block)
+      : func_type(move(func_type)), ident(move(ident)), block(move(block)) {
+    Init();
+  }
+  FuncDefAST(unique_ptr<BaseAST>& func_type, unique_ptr<string>& ident, unique_ptr<VecAST>& params, unique_ptr<BaseAST>& block)
+      : func_type(move(func_type)), ident(move(ident)), params(move(params)), block(move(block)), has_param(true) {
+    Init();
+  }
 
   virtual void Dump() override;
+
+ private:
+  void Init();
 };
 
 class FuncTypeAST : public BaseAST {
@@ -135,9 +153,21 @@ class FuncTypeAST : public BaseAST {
   virtual void Dump() override;
 };
 
+class FuncFParamAST : public BaseAST {
+ public:
+  unique_ptr<BaseAST> type;
+  unique_ptr<string> ident;
+
+  FuncFParamAST(unique_ptr<BaseAST>& type, unique_ptr<string>& ident)
+      : type(move(type)), ident(move(ident)) {}
+
+  virtual void Dump() override;
+};
+
 class BlockAST : public BaseAST {
  public:
   unique_ptr<VecAST> blocks;  // block item list
+  VecAST* func_params = nullptr;
 
   BlockAST(unique_ptr<VecAST>& blocks) : blocks(move(blocks)) {}
   virtual void Dump() override;
@@ -245,7 +275,7 @@ class BTypeAST : public BaseAST {
   string type;
 
   BTypeAST(string type) : type(move(type)) {}
-  virtual void Dump() override {}
+  virtual void Dump() override;
 };
 
 class ConstDefAST : public BaseAST {
@@ -462,6 +492,19 @@ class LOrAST : public ExpBaseAST {
   LOrAST(unique_ptr<ExpBaseAST>& lor, unique_ptr<ExpBaseAST>& land)
       : is_single(false), lor(move(lor)), land(move(land)) {}
 
+  virtual void Dump() override;
+  virtual void Eval() override;
+};
+
+class FuncCallAST : public ExpBaseAST {
+ public:
+  unique_ptr<string> ident;
+  unique_ptr<VecAST> rparams;
+  bool has_rparams = false;
+
+  FuncCallAST(unique_ptr<string>& ident) : ident(move(ident)) {}
+  FuncCallAST(unique_ptr<string>& ident, unique_ptr<VecAST>& rparams) 
+      : ident(move(ident)), rparams(move(rparams)), has_rparams(true) {}
   virtual void Dump() override;
   virtual void Eval() override;
 };

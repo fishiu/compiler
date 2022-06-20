@@ -41,36 +41,59 @@ using namespace std;
 
 // lexer 返回的所有 token 种类的声明
 // 注意 IDENT 和 INT_CONST 会返回 token 的值, 分别对应 str_val 和 int_val
-%token INT RETURN CONST IF ELSE WHILE BREAK CONTINUE
+%token INT RETURN CONST IF ELSE WHILE BREAK CONTINUE VOID
 %token <str_val> IDENT
 %token <int_val> INT_CONST
 %token <str_val> RELOP EQOP ANDOP OROP
 
 // 非终结符的类型定义
 %type <ast_val> FuncDef FuncType Decl ConstDecl ConstDef VarDecl VarDef Block
-%type <ast_val> BType BlockItem Stmt ClosedStmt OpenStmt SimpleStmt
+%type <ast_val> BType BlockItem Stmt ClosedStmt OpenStmt SimpleStmt FuncFParam
 %type <exp_ast_val> ConstExp ConstInitVal InitVal Exp UnaryExp PrimaryExp LVal
 %type <exp_ast_val> AddExp MulExp RelExp EqExp LAndExp LOrExp
 %type <int_val> Number
 %type <str_val> UnaryOp
-%type <vec_val> BlockItemList ConstDefList VarDefList
+%type <vec_val> BlockItemList ConstDefList VarDefList FuncDefList FuncFParams FuncRParams
 
 %%
 
 CompUnit
-  : FuncDef {
-    auto comp_unit = make_unique<CompUnitAST>();
-    comp_unit->func_def = unique_ptr<BaseAST>($1);
+  : FuncDefList {
+    auto func_def_list = unique_ptr<VecAST>($1);
+    auto comp_unit = make_unique<CompUnitAST>(func_def_list);
     ast = move(comp_unit);
+  }
+  ;
+
+FuncDefList
+  : FuncDef {
+    auto vec = new VecAST();
+    auto func_def = unique_ptr<BaseAST>($1);
+    vec->push_back(func_def);
+    $$ = vec;
+  }
+  | FuncDefList FuncDef {
+    auto vec = $1;
+    auto func_def = unique_ptr<BaseAST>($2);
+    vec->push_back(func_def);
+    $$ = vec;
   }
   ;
 
 FuncDef
   : FuncType IDENT '(' ')' Block {
-    auto ast = new FuncDefAST();
-    ast->func_type = unique_ptr<BaseAST>($1);
-    ast->ident = *unique_ptr<string>($2);
-    ast->block = unique_ptr<BaseAST>($5);
+    auto func_type = unique_ptr<BaseAST>($1);
+    auto ident = unique_ptr<string>($2);
+    auto block = unique_ptr<BaseAST>($5);
+    auto ast = new FuncDefAST(func_type, ident, block);
+    $$ = ast;
+  }
+  | FuncType IDENT '(' FuncFParams ')' Block {
+    auto func_type = unique_ptr<BaseAST>($1);
+    auto ident = unique_ptr<string>($2);
+    auto func_f_params = unique_ptr<VecAST>($4);
+    auto block = unique_ptr<BaseAST>($6);
+    auto ast = new FuncDefAST(func_type, ident, func_f_params, block);
     $$ = ast;
   }
   ;
@@ -80,6 +103,48 @@ FuncType
     auto ast = new FuncTypeAST();
     ast->type = "int";
     $$ = ast;
+  }
+  | VOID {
+    auto ast = new FuncTypeAST();
+    ast->type = "void";
+    $$ = ast;
+  }
+  ;
+
+FuncFParams
+  : FuncFParam {
+    auto param = unique_ptr<BaseAST>($1);
+    auto ast = new VecAST();
+    ast->push_back(param);
+    $$ = ast;
+  }
+  | FuncFParams ',' FuncFParam {
+    auto vec = $1;
+    auto param = unique_ptr<BaseAST>($3);
+    vec->push_back(param);
+  }
+  ;
+
+FuncFParam
+  : BType IDENT {
+    auto type = unique_ptr<BaseAST>($1);
+    auto ident = unique_ptr<string>($2);
+    auto ast = new FuncFParamAST(type, ident);
+    $$ = ast;
+  }
+  ;
+
+FuncRParams
+  : Exp {
+    auto param = unique_ptr<BaseAST>($1);
+    auto ast = new VecAST();
+    ast->push_back(param);
+    $$ = ast;
+  }
+  | FuncRParams ',' Exp {
+    auto vec = $1;
+    auto param = unique_ptr<BaseAST>($3);
+    vec->push_back(param);
   }
   ;
 
@@ -351,6 +416,21 @@ UnaryExp
     printf("UnaryExp -> UnaryOp(%s) UnaryExp\n", $1->c_str());
     auto unary = unique_ptr<ExpBaseAST>($2);
     auto ast = new UnaryAST($1, unary);
+    $$ = ast;
+  }
+  | IDENT '(' ')' {
+    // func call
+    printf("UnaryExp -> %s()\n", $1->c_str());
+    auto ident = unique_ptr<string>($1);
+    auto ast = new FuncCallAST(ident);
+    $$ = ast;
+  }
+  | IDENT '(' FuncRParams ')' {
+    // func call with params
+    printf("UnaryExp -> %s(params...)\n", $1->c_str());
+    auto ident = unique_ptr<string>($1);
+    auto params = unique_ptr<VecAST>($3);
+    auto ast = new FuncCallAST(ident, params);
     $$ = ast;
   }
   ;

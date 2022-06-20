@@ -11,10 +11,16 @@
 
 using namespace std;
 
+typedef struct {
+  string tag;  // var, const, func
+  variant<int, string> val;  // var_name, const_val, func_name
+} glb_sym_t;
+
 typedef variant<int, string> sym_t;
 typedef map<string, sym_t> symtab_t;
 typedef tuple<string, string, string> labels_t;
 class SymTabStack;
+class GlbSymTab;
 class WhileStack;
 
 extern int label_cnt;
@@ -23,6 +29,7 @@ extern int tmp_var_no;  // current temp variable number
 string NewTempVar();
 extern SymTabStack symtab_stack;
 extern WhileStack while_stack;    // to maintain multi while
+extern GlbSymTab glb_symtab;
 
 
 // symbol table
@@ -45,7 +52,22 @@ class SymTabStack {
   bool Exist(unique_ptr<string>& symbol, bool cur_level);
   sym_t Lookup(unique_ptr<string>& symbol);
 
-  // ~SymTabStack();
+  // todo ~SymTabStack();
+};
+
+class GlbSymTab {
+ private:
+  map<string, glb_sym_t> sym_map;
+  bool Exist(unique_ptr<string>& symbol);
+ 
+ public:
+  // def const
+  void Insert(unique_ptr<string>& symbol, int value);
+  // def var or 
+  void Insert(unique_ptr<string>& symbol, string value, bool is_func=false);
+  
+  glb_sym_t Lookup(unique_ptr<string>& symbol);
+  // todo ~GlbSymTab();
 };
 
 class WhileStack {

@@ -10,6 +10,10 @@ string NewTempVar() {
 }
 SymTabStack symtab_stack;
 WhileStack while_stack;
+GlbSymTab glb_symtab;
+
+
+// ==================== SymTabStack ==================== //
 
 // SymTabStack methods
 void SymTabStack::Push() {
@@ -25,11 +29,23 @@ void SymTabStack::Pop() {
   // cnt--;
 }
 
+/**
+ * @brief insert a constant var (into the top stack)
+ * 
+ * @param symbol 
+ * @param value constant value (int)
+ */
 void SymTabStack::Insert(unique_ptr<string>& symbol, int value) {
   assert(!Exist(symbol, true));
   stk.back()[*symbol] = value;
 }
 
+/**
+ * @brief insert a variable (into the top stack) and create memory space
+ * 
+ * @param symbol 
+ * @return string memory address name
+ */
 string SymTabStack::Insert(unique_ptr<string>& symbol) {
   assert(!Exist(symbol, true));
   string name = "@" + *symbol + "_" + to_string(cnt);
@@ -38,7 +54,13 @@ string SymTabStack::Insert(unique_ptr<string>& symbol) {
   return name;
 }
 
-// currently
+/**
+ * @brief search through all symtab in the stack (inversely)
+ * 
+ * @param symbol 
+ * @param cur_level only search in the current level symtab
+ * @return bool whether exist 
+ */
 bool SymTabStack::Exist(unique_ptr<string>& symbol, bool cur_level=false) {
   int layer = 0;
   // reverse
@@ -67,6 +89,46 @@ sym_t SymTabStack::Lookup(unique_ptr<string>& symbol) {
   assert(false);
 }
 
+// ==================== Global Sym Tab ==================== //
+
+bool GlbSymTab::Exist(unique_ptr<string>& symbol) {
+  auto it = sym_map.find(*symbol);
+  return it != sym_map.end();
+}
+
+void GlbSymTab::Insert(unique_ptr<string>& symbol, int value) {
+  assert(!Exist(symbol));
+  glb_sym_t sym;
+  sym.tag = "int";
+  sym.val = value;
+  sym_map[*symbol] = sym;
+}
+
+/**
+ * @brief insert func or var
+ * 
+ * all global identifier can not share name, even there are different
+ * type (func, var ...)
+ * todo btw: can local var share name with global func (assume no)?
+ * 
+ * @param symbol 
+ * @param value void/int for func, int for var
+ * @param is_func 
+ */
+void GlbSymTab::Insert(unique_ptr<string>& symbol, string value, bool is_func) {
+  assert(!Exist(symbol));
+  glb_sym_t sym;
+  sym.tag = is_func ? "func" : "var";
+  sym.val = value;
+  sym_map[*symbol] = sym;
+}
+
+glb_sym_t GlbSymTab::Lookup(unique_ptr<string>& symbol) {
+  assert(Exist(symbol));
+  return sym_map[*symbol];
+}
+
+// ==================== WhileStack ==================== //
 
 // while stack implementations
 labels_t WhileStack::get_label(int i) {

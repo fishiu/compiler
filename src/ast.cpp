@@ -2,7 +2,20 @@
 
 static list<int> tmp_var_list;
 
-void CompUnitAST::Dump() { func_def->Dump(); }
+void CompUnitAST::Dump() {
+  for (auto& func_def : func_def_list->vec)
+    func_def->Dump();
+}
+
+void FuncDefAST::Init() {
+  auto func_type_ast = dynamic_cast<FuncTypeAST*>(func_type.get());
+  if (func_type_ast->type == "void") {
+    is_void = true;
+    glb_symtab.Insert(ident, "void", true);
+  } else {
+    glb_symtab.Insert(ident, "i32", true);
+  }
+}
 
 void FuncDefAST::Dump() {
   // modify func ir string lines
@@ -10,7 +23,22 @@ void FuncDefAST::Dump() {
   streambuf* old_buf = cout.rdbuf();
   cout.rdbuf(tmpss.rdbuf());  // redirect to tmpss
 
-  cout << "fun @" << ident << "(): ";
+  // func head
+  cout << "fun @" << *ident << "(";
+  if (has_param) {
+    int param_id = 0;
+    for (auto& param : params->vec) {
+      if (param_id++ != 0) {
+        cout << ", ";
+      }
+      param->Dump();
+      param_id++;
+    }
+    // cast block to BlockAST
+    auto block_ast = dynamic_cast<BlockAST*>(block.get());
+    block_ast->func_params = params.get();
+  }
+  cout << ")";
   func_type->Dump();
   cout << " {" << endl << "\%entry:" << endl;
   block->Dump();
@@ -24,23 +52,46 @@ void FuncDefAST::Dump() {
     lline = ir[pt] + lline;
   if (lline.substr(0, 4) == "%ret")
     // if last line is ret, remove it
-    ir = ir.substr(0, pt + 1);
+    ir = ir.substr(0, pt);
   
   // restore stream
   cout.rdbuf(old_buf);
   cout << ir;
 
-  cout << "}";
+  if (is_void) {
+    cout << "  ret" << endl;
+  }
+  cout << "}" << endl << endl;
 }
 
 void FuncTypeAST::Dump() {
   if (type == "int") {
-    cout << "i32";
+    cout << ": i32";
+  } else {
+    // do nothing
+    assert(type == "void");
   }
+}
+
+void FuncFParamAST::Dump() {
+  cout << "@" << *ident;
+  type->Dump();
 }
 
 void BlockAST::Dump() {
   symtab_stack.Push();
+  
+  // init funcf params
+  if (func_params) {
+    for (auto& param : func_params->vec) {
+      // cast param to FuncFParamAST
+      auto fparam_ast = dynamic_cast<FuncFParamAST*>(param.get());
+      string mem_addr = symtab_stack.Insert(fparam_ast->ident);
+      cout << "  " << mem_addr << " = alloc i32" << endl;
+      cout << "  store " << "@" << *fparam_ast->ident << ", " << mem_addr << endl;
+    }
+  }
+
   for (auto& item : blocks->vec)
     item->Dump();
   symtab_stack.Pop();
@@ -58,6 +109,15 @@ void DeclAST::Dump() {
 void ConstDeclAST::Dump() {
   for (auto& def : def_list->vec) {
     def->Dump();
+  }
+}
+
+void BTypeAST::Dump() {
+  if (type == "int") {
+    cout << ": i32";
+  } else {
+    // do nothing
+    assert(type == "void");
   }
 }
 
@@ -700,4 +760,52 @@ void LOrAST::Eval() {
   }
   
   if (!is_const) evaluated = true;
+}
+
+void FuncCallAST::Dump() {
+  // %0 = call @half(10, %2)
+  if (has_rparams) {
+    for (auto& rparam : rparams->vec)
+      rparam->Dump();
+  }
+
+  glb_sym_t func_sym = glb_symtab.Lookup(ident);
+  string sym_val = get<string>(func_sym.val);
+  if (sym_val == "void") {
+    cout << "  ";
+  } else {
+    assert(sym_val == "i32");
+    cout << "  " << get_repr() << " = ";
+  }
+  cout << "call @" << *ident << "(";
+  
+  if (has_rparams) {
+    int param_cnt = 0;
+    for (auto& param : rparams->vec) {
+      auto param_ast = dynamic_cast<ExpBaseAST*>(param.get());
+      if (param_cnt++ > 0) {
+        cout << ", ";
+      }
+      cout << param_ast->get_repr();
+    }
+  }
+
+  cout << ")" << endl;
+}
+
+void FuncCallAST::Eval() {
+  // todo need to search function table
+  if (evaluated) return;
+
+  if (has_rparams) {
+    for (auto& rparam : rparams->vec) {
+      auto rparam_ast = dynamic_cast<ExpBaseAST*>(rparam.get());
+      rparam_ast->Eval();
+    }
+  }
+
+  evaluated = true;
+  is_number = false;
+  is_const = false;
+  addr = NewTempVar();
 }
