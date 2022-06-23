@@ -303,43 +303,51 @@ repr_t Visit(const koopa_raw_value_t &value) {
     case KOOPA_RVT_RETURN:
       cout << "\n  # ret" << endl;
       Visit(kind.data.ret);
+      reg_allocator.free();
       break;
     case KOOPA_RVT_INTEGER:
       repr = Visit(kind.data.integer);
-      // do not save
+      // do not save ! do not clear reg!
       break;
     case KOOPA_RVT_BINARY:
       cout << "\n  # binary" << endl;
       repr = Visit(kind.data.binary);
       assert(!repr.is_reg);
       vmap[value] = repr;
+      reg_allocator.free();
       break;
     case KOOPA_RVT_ALLOC:
       cout << "\n  # alloc" << endl;
       repr.addr = stack.get_top();
       stack.inc_top(4);
       vmap[value] = repr;
+      reg_allocator.free();
       break;
     case KOOPA_RVT_LOAD:
       cout << "\n  # load" << endl;
       repr = Visit(kind.data.load);
       assert(!repr.is_reg);
       vmap[value] = repr;
+      reg_allocator.free();
       break;
     case KOOPA_RVT_STORE:
       cout << "\n  # store" << endl;
       Visit(kind.data.store);
+      reg_allocator.free();
       break;
     case KOOPA_RVT_BRANCH:
       Visit(kind.data.branch);
+      reg_allocator.free();
       break;
     case KOOPA_RVT_JUMP:
       Visit(kind.data.jump);
+      reg_allocator.free();
       break;
     case KOOPA_RVT_CALL:
       has_ret = value->ty->tag != KOOPA_RTT_UNIT;
       repr = Visit(kind.data.call, has_ret);
       vmap[value] = repr;  // todo actually, if has_ret=false, won't be used anymore
+      reg_allocator.free();
       break;
     case KOOPA_RVT_FUNC_ARG_REF:
       // already handle all func args in func def
@@ -350,7 +358,7 @@ repr_t Visit(const koopa_raw_value_t &value) {
       printf("unhandled value kind %d\n", kind.tag);
       assert(false);
   }
-  reg_allocator.free();  // todo is it ok?
+  // reg_allocator.free();  // todo is it ok? fuck! not ok!
   return repr;
 }
 
@@ -361,7 +369,7 @@ void Visit(const koopa_raw_return_t &ret) {
     repr_t repr = Visit(retv);
     assert(repr.is_reg);
     if (repr.addr != 7) {
-      cout << "  move a0" << ", " << format_reg(repr.addr) << endl;
+      cout << "  mv a0" << ", " << format_reg(repr.addr) << endl;
     }
   }
 
@@ -530,12 +538,12 @@ repr_t Visit(const koopa_raw_call_t &call, bool has_ret) {
         // todo unsafe assert here, better make sure reg_ai is available
         reg_allocator.alloc(reg_ai);
         cout << "  mv " << format_reg(reg_ai) << ", " << format_reg(reg_id) << endl;
-        reg_allocator.free(reg_id);
       }
     } else {
       int addr = (i - 8) * 4;  // it is really comfortable!
       cout << "  sw " << format_reg(reg_id) << ", " << addr << "(sp)" << endl;
     }
+    reg_allocator.free(reg_id);
   }
   cout << "  call " << call.callee->name + 1 << endl;
   
