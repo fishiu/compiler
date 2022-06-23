@@ -185,6 +185,10 @@ void Visit(const koopa_raw_slice_t &slice) {
 
 // visit func
 void Visit(const koopa_raw_function_t &func) {
+  // lib function
+  if (func->bbs.len == 0) // decl
+    return;
+
   // enter new function, all things are cleard
   stack.clear();
   ra_addr = -1;
@@ -236,7 +240,7 @@ void Visit(const koopa_raw_function_t &func) {
   stack_size = ceil(stack_size / 16.0) * 16;
   stack.set_size(stack_size);
   if (stack_size) {
-    if (stack_size <= 2048)
+    if (stack_size <= 2047)
       cout << "  addi sp, sp, " << -stack_size << endl;
     else {
       cout << "  li t0, " << -stack_size << endl;
@@ -381,7 +385,7 @@ void Visit(const koopa_raw_return_t &ret) {
   // modify stack pointer
   int stack_size = stack.get_size();
   if (stack_size) {
-    if (stack_size <= 2048)
+    if (stack_size <= 2047)
       cout << "  addi sp, sp, " << stack_size << endl;
     else {
       // too big stack size

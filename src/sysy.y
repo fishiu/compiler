@@ -47,49 +47,65 @@ using namespace std;
 %token <str_val> RELOP EQOP ANDOP OROP
 
 // 非终结符的类型定义
-%type <ast_val> FuncDef FuncType Decl ConstDecl ConstDef VarDecl VarDef Block
-%type <ast_val> BType BlockItem Stmt ClosedStmt OpenStmt SimpleStmt FuncFParam
+%type <ast_val> FuncDef Decl ConstDecl ConstDef VarDecl VarDef Block CompUnitList
+%type <ast_val> BlockItem Stmt ClosedStmt OpenStmt SimpleStmt FuncFParam 
 %type <exp_ast_val> ConstExp ConstInitVal InitVal Exp UnaryExp PrimaryExp LVal
 %type <exp_ast_val> AddExp MulExp RelExp EqExp LAndExp LOrExp
 %type <int_val> Number
-%type <str_val> UnaryOp
-%type <vec_val> BlockItemList ConstDefList VarDefList FuncDefList FuncFParams FuncRParams
+%type <str_val> UnaryOp Type
+%type <vec_val> BlockItemList ConstDefList VarDefList FuncFParams FuncRParams
 
 %%
 
 CompUnit
-  : FuncDefList {
-    auto func_def_list = unique_ptr<VecAST>($1);
-    auto comp_unit = make_unique<CompUnitAST>(func_def_list);
+  : CompUnitList {
+    printf("CompUnit -> CompUnitList\n");
+    auto comp_unit = unique_ptr<CompUnitAST>((CompUnitAST*)($1));
     ast = move(comp_unit);
   }
   ;
 
-FuncDefList
+CompUnitList
   : FuncDef {
-    auto vec = new VecAST();
+    printf("CompUnitList -> FuncDef\n");
+    auto comp_unit = new CompUnitAST();
     auto func_def = unique_ptr<BaseAST>($1);
-    vec->push_back(func_def);
-    $$ = vec;
+    comp_unit->func_def_list.push_back(move(func_def));
+    $$ = comp_unit;
   }
-  | FuncDefList FuncDef {
-    auto vec = $1;
+  | Decl {
+    printf("CompUnitList -> Decl\n");
+    auto comp_unit = new CompUnitAST();
+    auto decl = unique_ptr<BaseAST>($1);
+    comp_unit->decl_list.push_back(move(decl));
+    $$ = comp_unit;
+  }
+  | CompUnitList FuncDef {
+    printf("CompUnitList -> CompUnitList FuncDef\n");
+    auto comp_unit = (CompUnitAST *)($1);
     auto func_def = unique_ptr<BaseAST>($2);
-    vec->push_back(func_def);
-    $$ = vec;
+    comp_unit->func_def_list.push_back(move(func_def));
+    $$ = comp_unit;
+  }
+  | CompUnitList Decl {
+    printf("CompUnitList -> CompUnitList Decl\n");
+    auto comp_unit = (CompUnitAST *)($1);
+    auto decl = unique_ptr<BaseAST>($2);
+    comp_unit->decl_list.push_back(move(decl));
+    $$ = comp_unit;
   }
   ;
 
 FuncDef
-  : FuncType IDENT '(' ')' Block {
-    auto func_type = unique_ptr<BaseAST>($1);
+  : Type IDENT '(' ')' Block {
+    auto func_type = unique_ptr<string>($1);
     auto ident = unique_ptr<string>($2);
     auto block = unique_ptr<BaseAST>($5);
     auto ast = new FuncDefAST(func_type, ident, block);
     $$ = ast;
   }
-  | FuncType IDENT '(' FuncFParams ')' Block {
-    auto func_type = unique_ptr<BaseAST>($1);
+  | Type IDENT '(' FuncFParams ')' Block {
+    auto func_type = unique_ptr<string>($1);
     auto ident = unique_ptr<string>($2);
     auto func_f_params = unique_ptr<VecAST>($4);
     auto block = unique_ptr<BaseAST>($6);
@@ -98,16 +114,14 @@ FuncDef
   }
   ;
 
-FuncType
+Type
   : INT {
-    auto ast = new FuncTypeAST();
-    ast->type = "int";
-    $$ = ast;
+    string *type = new string("int");
+    $$ = type;
   }
   | VOID {
-    auto ast = new FuncTypeAST();
-    ast->type = "void";
-    $$ = ast;
+    string *type = new string("void");
+    $$ = type;
   }
   ;
 
@@ -126,8 +140,8 @@ FuncFParams
   ;
 
 FuncFParam
-  : BType IDENT {
-    auto type = unique_ptr<BaseAST>($1);
+  : Type IDENT {
+    auto type = unique_ptr<string>($1);
     auto ident = unique_ptr<string>($2);
     auto ast = new FuncFParamAST(type, ident);
     $$ = ast;
@@ -185,11 +199,13 @@ BlockItem
 
 Decl
   : ConstDecl {
+    printf("------------Decl: ConstDecl------------\n");
     auto const_decl = unique_ptr<BaseAST>($1);
     auto ast = new DeclAST(const_decl, false);
     $$ = ast;
   }
   | VarDecl {
+    printf("------------Decl: VarDecl------------\n");
     auto var_decl = unique_ptr<BaseAST>($1);
     auto ast = new DeclAST(var_decl, true);
     $$ = ast;
@@ -197,17 +213,10 @@ Decl
   ;
 
 ConstDecl
-  : CONST BType ConstDefList ';' {
-    auto btype = unique_ptr<BaseAST>($2);
+  : CONST Type ConstDefList ';' {
+    auto btype = unique_ptr<string>($2);
     auto const_def_list = unique_ptr<VecAST>($3);
     auto ast = new ConstDeclAST(btype, const_def_list);
-    $$ = ast;
-  }
-  ;
-
-BType
-  : INT {
-    auto ast = new BTypeAST("int");
     $$ = ast;
   }
   ;
@@ -253,11 +262,9 @@ ConstExp
   ;
 
 VarDecl
-  : BType VarDefList ';' {
-    auto btype = unique_ptr<BaseAST>($1);
-    // cast btype to BTypeAST
-    auto btype_ast = static_cast<BTypeAST*>(btype.get());
-    printf("VarDecl -> %s VarDefList\n", btype_ast->type.c_str());
+  : Type VarDefList ';' {
+    auto btype = unique_ptr<string>($1);
+    printf("VarDecl -> %s VarDefList\n", btype->c_str());
     auto var_def_list = unique_ptr<VecAST>($2);
     auto ast = new VarDeclAST(btype, var_def_list);
     $$ = ast;

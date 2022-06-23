@@ -19,7 +19,6 @@ class ExpBaseAST;
 class VecAST;
 
 class FuncDefAST;
-class FuncTypeAST;
 class FuncFParamAST;
 class BlockAST;
 class BlockItemAST;
@@ -33,7 +32,6 @@ class ContinueAST;  // Another StmtAST
 class DeclAST;
 class ConstDeclAST;
 class VarDeclAST;
-class BTypeAST;
 
 class ConstDefAST;      // expbase
 class VarDefAST;        // expbase
@@ -114,10 +112,10 @@ class ExpBaseAST : public BaseAST {
 
 class CompUnitAST : public BaseAST {
  public:
-  unique_ptr<VecAST> func_def_list;
+  vector<unique_ptr<BaseAST>> func_def_list;
+  vector<unique_ptr<BaseAST>> decl_list;
 
-  CompUnitAST(unique_ptr<VecAST>& func_def_list)
-      : func_def_list(move(func_def_list)) {}
+  CompUnitAST() {}
   // TODO is there any way to keep const?
   virtual void Dump() override;
 };
@@ -125,7 +123,7 @@ class CompUnitAST : public BaseAST {
 // FuncDef 也是 BaseAST
 class FuncDefAST : public BaseAST {
  public:
-  unique_ptr<BaseAST> func_type;
+  unique_ptr<string> func_type;
   unique_ptr<string> ident;
   unique_ptr<VecAST> params;
   unique_ptr<BaseAST> block;
@@ -133,11 +131,11 @@ class FuncDefAST : public BaseAST {
   bool is_void = false;
 
   // TODO 有空了梳理一下string内存管理
-  FuncDefAST(unique_ptr<BaseAST>& func_type, unique_ptr<string>& ident, unique_ptr<BaseAST>& block)
+  FuncDefAST(unique_ptr<string>& func_type, unique_ptr<string>& ident, unique_ptr<BaseAST>& block)
       : func_type(move(func_type)), ident(move(ident)), block(move(block)) {
     Init();
   }
-  FuncDefAST(unique_ptr<BaseAST>& func_type, unique_ptr<string>& ident, unique_ptr<VecAST>& params, unique_ptr<BaseAST>& block)
+  FuncDefAST(unique_ptr<string>& func_type, unique_ptr<string>& ident, unique_ptr<VecAST>& params, unique_ptr<BaseAST>& block)
       : func_type(move(func_type)), ident(move(ident)), params(move(params)), block(move(block)), has_param(true) {
     Init();
   }
@@ -148,19 +146,12 @@ class FuncDefAST : public BaseAST {
   void Init();
 };
 
-class FuncTypeAST : public BaseAST {
- public:
-  string type;
-
-  virtual void Dump() override;
-};
-
 class FuncFParamAST : public BaseAST {
  public:
-  unique_ptr<BaseAST> type;
+  unique_ptr<string> type;
   unique_ptr<string> ident;
 
-  FuncFParamAST(unique_ptr<BaseAST>& type, unique_ptr<string>& ident)
+  FuncFParamAST(unique_ptr<string>& type, unique_ptr<string>& ident)
       : type(move(type)), ident(move(ident)) {}
 
   virtual void Dump() override;
@@ -264,21 +255,14 @@ class DeclAST : public BaseAST {
 
 class ConstDeclAST : public BaseAST {
  public:
-  unique_ptr<BaseAST> btype;
+  unique_ptr<string> btype;
   unique_ptr<VecAST> def_list;
 
-  ConstDeclAST(unique_ptr<BaseAST>& btype, unique_ptr<VecAST>& def_list)
+  ConstDeclAST(unique_ptr<string>& btype, unique_ptr<VecAST>& def_list)
       : btype(move(btype)), def_list(move(def_list)) {}
   virtual void Dump() override;
 };
 
-class BTypeAST : public BaseAST {
- public:
-  string type;
-
-  BTypeAST(string type) : type(move(type)) {}
-  virtual void Dump() override;
-};
 
 class ConstDefAST : public BaseAST {
  public:
@@ -310,10 +294,10 @@ class ConstExpAST : public ExpBaseAST {
 
 class VarDeclAST : public BaseAST {
  public:
-  unique_ptr<BaseAST> btype;
+  unique_ptr<string> btype;
   unique_ptr<VecAST> def_list;
 
-  VarDeclAST(unique_ptr<BaseAST>& btype, unique_ptr<VecAST>& def_list)
+  VarDeclAST(unique_ptr<string>& btype, unique_ptr<VecAST>& def_list)
       : btype(move(btype)), def_list(move(def_list)) {}
   virtual void Dump() override;
 };

@@ -10,7 +10,7 @@ string NewTempVar() {
 }
 SymTabStack symtab_stack;
 WhileStack while_stack;
-GlbSymTab glb_symtab;
+FuncTab functab;
 
 
 // ==================== SymTabStack ==================== //
@@ -91,41 +91,19 @@ sym_t SymTabStack::Lookup(unique_ptr<string>& symbol) {
 
 // ==================== Global Sym Tab ==================== //
 
-bool GlbSymTab::Exist(unique_ptr<string>& symbol) {
-  auto it = sym_map.find(*symbol);
-  return it != sym_map.end();
+bool FuncTab::Exist(string symbol) {
+  auto it = func_map.find(symbol);
+  return it != func_map.end();
 }
 
-void GlbSymTab::Insert(unique_ptr<string>& symbol, int value) {
+void FuncTab::Insert(string symbol, string func_type) {
   assert(!Exist(symbol));
-  glb_sym_t sym;
-  sym.tag = "int";
-  sym.val = value;
-  sym_map[*symbol] = sym;
+  func_map[symbol] = func_type;
 }
 
-/**
- * @brief insert func or var
- * 
- * all global identifier can not share name, even there are different
- * type (func, var ...)
- * todo btw: can local var share name with global func (assume no)?
- * 
- * @param symbol 
- * @param value void/int for func, int for var
- * @param is_func 
- */
-void GlbSymTab::Insert(unique_ptr<string>& symbol, string value, bool is_func) {
-  assert(!Exist(symbol));
-  glb_sym_t sym;
-  sym.tag = is_func ? "func" : "var";
-  sym.val = value;
-  sym_map[*symbol] = sym;
-}
-
-glb_sym_t GlbSymTab::Lookup(unique_ptr<string>& symbol) {
-  assert(Exist(symbol));
-  return sym_map[*symbol];
+string FuncTab::Lookup(unique_ptr<string>& symbol) {
+  assert(Exist(*symbol));
+  return func_map[*symbol];
 }
 
 // ==================== WhileStack ==================== //

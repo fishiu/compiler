@@ -2,18 +2,94 @@
 
 static list<int> tmp_var_list;
 
+void DumpFuncType(unique_ptr<string>& type) {
+  if (*type == "int") {
+    cout << ": i32";
+  } else {
+    // do nothing
+    // todo
+    assert(*type == "void");
+  }
+}
+
+void DumpBType(unique_ptr<string>& type) {
+  if (*type == "int") {
+    cout << ": i32";
+  } else {
+    // do nothing
+    assert(*type == "void");
+  }
+}
+
 void CompUnitAST::Dump() {
-  for (auto& func_def : func_def_list->vec)
+  cout << "decl @getint(): i32" << endl;
+  cout << "decl @getch(): i32" << endl;
+  cout << "decl @getarray(*i32): i32" << endl;
+  cout << "decl @putint(i32)" << endl;
+  cout << "decl @putch(i32)" << endl;
+  cout << "decl @putarray(i32, *i32)" << endl;
+  cout << "decl @starttime()" << endl;
+  cout << "decl @stoptime()" << endl << endl;
+
+  functab.Insert(string("getint"), string("int"));
+  functab.Insert(string("getch"), string("int"));
+  functab.Insert(string("getarray"), string("int"));
+  functab.Insert(string("putint"), string("void"));
+  functab.Insert(string("putch"), string("void"));
+  functab.Insert(string("putarray"), string("void"));
+  functab.Insert(string("starttime"), string("void"));
+  functab.Insert(string("stoptime"), string("void"));
+
+  symtab_stack.Push();
+
+  for (auto& decl : decl_list) {
+    auto decl_ast = dynamic_cast<DeclAST*>(decl.get());
+    if (decl_ast->is_var) {
+      auto var_decl = dynamic_cast<VarDeclAST*>(decl_ast->decl.get());
+      for (auto& var_def : var_decl->def_list->vec) {
+        auto var_def_ast = dynamic_cast<VarDefAST*>(var_def.get());
+        string var_name = symtab_stack.Insert(var_def_ast->ident);
+        // todo assert type == int
+        cout << "global " << var_name << " = alloc i32, ";
+        
+        if (var_def_ast->has_init) {
+          var_def_ast->init->Eval();
+          var_def_ast->init->Dump();
+          string repr = var_def_ast->init->get_repr();
+          if (repr[0] == '@' || repr[0] == '%') {
+            // var
+            cout << "zeroinit" << endl;
+            cout << "store " << repr << ", " << var_name << endl;
+          } else if (repr != "0") {
+            // const number
+            cout << repr << endl;
+          } else if(repr == "0") {
+            cout << "zeroinit" << endl;
+          } else {
+            assert(false);
+          }
+        } else {
+          cout << "zeroinit" << endl;
+        }
+      }
+    } else {
+      decl_ast->decl->Dump();
+    }
+  }
+
+  for (auto& func_def : func_def_list)
     func_def->Dump();
+  
+  symtab_stack.Pop();
 }
 
 void FuncDefAST::Init() {
-  auto func_type_ast = dynamic_cast<FuncTypeAST*>(func_type.get());
-  if (func_type_ast->type == "void") {
+  // todo
+  if (*func_type == "void") {
     is_void = true;
-    glb_symtab.Insert(ident, "void", true);
+    functab.Insert(*ident, "void");
   } else {
-    glb_symtab.Insert(ident, "i32", true);
+    functab.Insert(*ident, "i32");
   }
 }
 
@@ -39,7 +115,7 @@ void FuncDefAST::Dump() {
     block_ast->func_params = params.get();
   }
   cout << ")";
-  func_type->Dump();
+  DumpFuncType(func_type);
   cout << " {" << endl << "\%entry_" << *ident << ":" << endl;
   block->Dump();
 
@@ -64,18 +140,9 @@ void FuncDefAST::Dump() {
   cout << "}" << endl << endl;
 }
 
-void FuncTypeAST::Dump() {
-  if (type == "int") {
-    cout << ": i32";
-  } else {
-    // do nothing
-    assert(type == "void");
-  }
-}
-
 void FuncFParamAST::Dump() {
   cout << "@" << *ident;
-  type->Dump();
+  DumpFuncType(type);
 }
 
 void BlockAST::Dump() {
@@ -112,14 +179,6 @@ void ConstDeclAST::Dump() {
   }
 }
 
-void BTypeAST::Dump() {
-  if (type == "int") {
-    cout << ": i32";
-  } else {
-    // do nothing
-    assert(type == "void");
-  }
-}
 
 void ConstDefAST::Dump() {
   init->Eval();  // evaluate
@@ -629,9 +688,9 @@ void LAndAST::Dump() {
     return;
   }
 
-  land->Dump();
-  eq->Dump();
   if (is_number) {
+    land->Dump();
+    eq->Dump();
     cout << "  // " << land->val << " && " << eq->val << " no dump" << endl;
   } else {
     /* short circuit: 
@@ -642,6 +701,7 @@ void LAndAST::Dump() {
      */
 
     // prepare label for short circuit
+    land->Dump();
     string label_then = "%then_" + to_string(label_cnt);
     string label_else = "%else_" + to_string(label_cnt);
     string label_end = "%end_" + to_string(label_cnt);
@@ -655,6 +715,7 @@ void LAndAST::Dump() {
     cout << label_then << ":" << endl;
     string tmp_rhs = "%" + to_string(tmp_var_no++);
     // result = rhs != 0
+    eq->Dump();
     cout << "  " << tmp_rhs << " = ne " << eq->get_repr() << ", 0" << endl;
     cout << "  store " << tmp_rhs << ", " << result << endl;
     cout << "  jump " << label_end << endl;
@@ -699,9 +760,10 @@ void LOrAST::Dump() {
     land->Dump();
     return;
   }
-  lor->Dump();
-  land->Dump();
+
   if (is_number) {
+    lor->Dump();
+    land->Dump();
     cout << "  // " << lor->val << " || " << land->val << " no dump" << endl;
   }  else {
     /* short circuit: 
@@ -711,6 +773,7 @@ void LOrAST::Dump() {
      * }
      */
 
+    lor->Dump();
     string label_then = "%then_" + to_string(label_cnt);
     string label_else = "%else_" + to_string(label_cnt);
     string label_end = "%end_" + to_string(label_cnt);
@@ -724,6 +787,7 @@ void LOrAST::Dump() {
     cout << label_then << ":" << endl;
     string tmp_rhs = "%" + to_string(tmp_var_no++);
     // result = rhs != 0
+    land->Dump();
     cout << "  " << tmp_rhs << " = ne " << land->get_repr() << ", 0" << endl;
     cout << "  store " << tmp_rhs << ", " << result << endl;
     cout << "  jump " << label_end << endl;
@@ -769,12 +833,11 @@ void FuncCallAST::Dump() {
       rparam->Dump();
   }
 
-  glb_sym_t func_sym = glb_symtab.Lookup(ident);
-  string sym_val = get<string>(func_sym.val);
-  if (sym_val == "void") {
+  string func_type = functab.Lookup(ident);
+  if (func_type == "void") {
     cout << "  ";
   } else {
-    assert(sym_val == "i32");
+    // assert(sym_val == "i32");
     cout << "  " << get_repr() << " = ";
   }
   cout << "call @" << *ident << "(";
