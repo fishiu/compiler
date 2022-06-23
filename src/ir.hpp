@@ -34,5 +34,6 @@ repr_t Visit(const koopa_raw_value_t &value);
 repr_t Visit(const koopa_raw_integer_t &integer);
 repr_t Visit(const koopa_raw_binary_t &binary);
 repr_t Visit(const koopa_raw_load_t &load);
+repr_t Visit(const koopa_raw_call_t &call, bool has_ret);
 
 #endif

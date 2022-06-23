@@ -17,6 +17,7 @@ using namespace std;
 class BaseAST;
 class ExpBaseAST;
 class VecAST;
+
 class FuncDefAST;
 class FuncTypeAST;
 class FuncFParamAST;
@@ -33,6 +34,7 @@ class DeclAST;
 class ConstDeclAST;
 class VarDeclAST;
 class BTypeAST;
+
 class ConstDefAST;      // expbase
 class VarDefAST;        // expbase
 class ConstInitValAST;  // expbase

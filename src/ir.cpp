@@ -10,11 +10,13 @@ class Stack {
  private:
   int stack_top = 0;   // stack top position
   int stack_size = 0;  // stack length
+ 
  public:
   int inc_top(int size) {
     printf("[debug stack] inc_stack: %d\n", size);
     return stack_top += size;
   }
+  
   int get_top() {
     return stack_top;
   }
@@ -22,12 +24,19 @@ class Stack {
   int get_size() {
     return stack_size;
   }
+  
   void set_size(int size) {
     printf("[debug stack] set_size: %d\n", size);
     stack_size = size;
   }
+
+  void clear() {
+    stack_top = 0;
+    stack_size = 0;
+  }
 } stack;
 
+// now reg allocator use three-level reg state to better allocate
 class RegAllocator {
  private:
   // todo consider changing the regs into queue or other data structure to avoid loops
@@ -44,19 +53,43 @@ class RegAllocator {
   const reg_t& alloc() {
     for (auto &reg : regs) {
       if (!reg.occupied) {
-        // found an available registor
+        // found free reg
         reg.occupied = true;
         return reg;
       }
     }
+    // i believe that currently reg won't be full
+    // todo a half written version is saved in git stash
+    
     // no available register
     assert(false);
+  }
+
+  /**
+   * @brief alloc specific reg
+   * 
+   * @param reg_id 
+   */
+  void alloc(int reg_id) {
+    assert(reg_id < REGNUM);  // x0 cannot be allocated
+    assert(regs[reg_id].occupied == false);
+    regs[reg_id].occupied = true;
   }
 
   void free() {
     for (auto &reg : regs) {
       reg.occupied = false;
     }
+  }
+
+  /**
+   * @brief free specific reg
+   * 
+   * @param reg_id 
+   */
+  void free(int reg_id) {
+    assert(reg_id < REGNUM);
+    regs[reg_id].occupied = false;
   }
 } reg_allocator;
 
@@ -77,6 +110,7 @@ string format_reg(int reg_num) {
 // must use a value map, so when referred to a value pointer
 // it won't be dump twice
 map<const koopa_raw_value_t, repr_t> vmap;
+int ra_addr = -1;  // -1 means no ra address
 
 string get_op_str(koopa_raw_binary_op_t op) {
   switch (op) {
@@ -125,8 +159,6 @@ void Visit(const koopa_raw_program_t &program) {
 
   Visit(program.values);
 
-  cout << "  .text" << endl;
-  cout << "  .globl main" << endl;
   Visit(program.funcs);
 }
 
@@ -153,27 +185,86 @@ void Visit(const koopa_raw_slice_t &slice) {
 
 // visit func
 void Visit(const koopa_raw_function_t &func) {
-  printf("visit func\n");
+  // enter new function, all things are cleard
+  stack.clear();
+  ra_addr = -1;
+  reg_allocator.free();
+  vmap.clear();
+
+  // generate information
+  cout << "  .text" << endl;
+  cout << "  .globl " << func->name + 1 << endl;
   cout << func->name + 1 << ":" << endl;
-  // get stack size
+  
+  // prepare stack size
+  int max_arg_num = 0;
+  bool save_ra = false;
   int stack_size = 0;
+
+  // loop through basic blocks in the function
   for (size_t i = 0; i < func->bbs.len; ++i) {
     koopa_raw_basic_block_t bb_ptr = reinterpret_cast<koopa_raw_basic_block_t>(func->bbs.buffer[i]);
     for (size_t j = 0; j < bb_ptr->insts.len; ++j) {
       koopa_raw_value_t inst_ptr = reinterpret_cast<koopa_raw_value_t>(bb_ptr->insts.buffer[j]);
-      if (inst_ptr->ty->tag != KOOPA_RTT_UNIT)
+      if (inst_ptr->ty->tag != KOOPA_RTT_UNIT) {
         // only value with return is counted
         stack_size += 4;
+      }
+      if (inst_ptr->kind.tag == KOOPA_RVT_CALL) {
+        // caller save ra
+        save_ra = true;
+        // get max arg num
+        int arg_num = inst_ptr->kind.data.call.args.len;
+        if (arg_num > max_arg_num) {
+          max_arg_num = arg_num;
+        }
+      }
     }
   }
+
+  // calculate stack size
+  int arg_in_stack_size = 0;
+  if (max_arg_num > 8) {
+    arg_in_stack_size = (max_arg_num - 8) * 4;
+  }
+  stack_size += arg_in_stack_size;
+  stack.inc_top(arg_in_stack_size);  // increase at once
+  // multi calls share the same save_ra_addr
+  if (save_ra)
+    stack_size += 4;
+  // align to 16
   stack_size = ceil(stack_size / 16.0) * 16;
   stack.set_size(stack_size);
-  if (stack_size <= 2048)
-    cout << "  addi sp, sp, " << -stack_size << endl;
-  else {
-    cout << "  li t0, " << -stack_size << endl;
-    cout << "  addi sp, sp, t0" << endl;
+  if (stack_size) {
+    if (stack_size <= 2048)
+      cout << "  addi sp, sp, " << -stack_size << endl;
+    else {
+      cout << "  li t0, " << -stack_size << endl;
+      cout << "  addi sp, sp, t0" << endl;
+    }
   }
+
+  // assign ra address
+  if (save_ra) {
+    ra_addr = stack.get_size() - 4;
+    cout << "  sw ra, " << ra_addr << "(sp)" << endl;
+  }
+
+  // params
+  for (size_t i = 0; i < func->params.len; ++i) {
+    koopa_raw_value_t param_value = reinterpret_cast<koopa_raw_value_t>(func->params.buffer[i]);
+    if (i < 8) {
+      int reg_id = i + 7;
+      reg_allocator.alloc(reg_id);
+      repr_t repr = {true, reg_id};
+      vmap[param_value] = repr;
+    } else {
+      int addr = stack.get_size() + (i - 8) * 4;
+      repr_t repr = {false, addr};
+      vmap[param_value] = repr;
+    }
+  }
+
   // visit all basic blocks
   Visit(func->bbs);
 }
@@ -207,11 +298,11 @@ repr_t Visit(const koopa_raw_value_t &value) {
   printf("visit new value\n");
   const auto &kind = value->kind;
   repr_t repr = {false, -1};
+  bool has_ret;
   switch (kind.tag) {
     case KOOPA_RVT_RETURN:
       cout << "\n  # ret" << endl;
       Visit(kind.data.ret);
-      reg_allocator.free();
       break;
     case KOOPA_RVT_INTEGER:
       repr = Visit(kind.data.integer);
@@ -222,26 +313,22 @@ repr_t Visit(const koopa_raw_value_t &value) {
       repr = Visit(kind.data.binary);
       assert(!repr.is_reg);
       vmap[value] = repr;
-      reg_allocator.free();
       break;
     case KOOPA_RVT_ALLOC:
       cout << "\n  # alloc" << endl;
       repr.addr = stack.get_top();
       stack.inc_top(4);
       vmap[value] = repr;
-      reg_allocator.free();
       break;
     case KOOPA_RVT_LOAD:
       cout << "\n  # load" << endl;
       repr = Visit(kind.data.load);
       assert(!repr.is_reg);
       vmap[value] = repr;
-      reg_allocator.free();
       break;
     case KOOPA_RVT_STORE:
       cout << "\n  # store" << endl;
       Visit(kind.data.store);
-      reg_allocator.free();
       break;
     case KOOPA_RVT_BRANCH:
       Visit(kind.data.branch);
@@ -249,31 +336,52 @@ repr_t Visit(const koopa_raw_value_t &value) {
     case KOOPA_RVT_JUMP:
       Visit(kind.data.jump);
       break;
+    case KOOPA_RVT_CALL:
+      has_ret = value->ty->tag != KOOPA_RTT_UNIT;
+      repr = Visit(kind.data.call, has_ret);
+      vmap[value] = repr;  // todo actually, if has_ret=false, won't be used anymore
+      break;
+    case KOOPA_RVT_FUNC_ARG_REF:
+      // already handle all func args in func def
+      assert(false);
+      break;
     default:
       // 其他类型暂时遇不到
       printf("unhandled value kind %d\n", kind.tag);
       assert(false);
   }
-
+  reg_allocator.free();  // todo is it ok?
   return repr;
 }
 
 // visit return
 void Visit(const koopa_raw_return_t &ret) {
-  printf("visit return\n");
-  repr_t repr = Visit(ret.value);
-
-  // cout << "  # ret" << endl;
-  assert(repr.is_reg);
-  cout << "  mv a0, " << format_reg(repr.addr) << endl;
-  int stack_size = stack.get_size();
-  if (stack_size <= 2048)
-    cout << "  addi sp, sp, " << stack_size << endl;
-  else {
-    // too big stack size
-    cout << "  li t0, " << stack_size << endl;
-    cout << "  addi sp, sp, t0" << endl;
+  koopa_raw_value_t retv = ret.value;
+  if (retv) {  // not void ret
+    repr_t repr = Visit(retv);
+    assert(repr.is_reg);
+    if (repr.addr != 7) {
+      cout << "  move a0" << ", " << format_reg(repr.addr) << endl;
+    }
   }
+
+  // load ra from sp
+  if (ra_addr > 0) {  // todo
+    cout << "  lw ra, " << ra_addr << "(sp)" << endl;
+  }
+
+  // modify stack pointer
+  int stack_size = stack.get_size();
+  if (stack_size) {
+    if (stack_size <= 2048)
+      cout << "  addi sp, sp, " << stack_size << endl;
+    else {
+      // too big stack size
+      cout << "  li t0, " << stack_size << endl;
+      cout << "  addi sp, sp, t0" << endl;
+    }
+  }
+
   cout << "  ret" << endl;
 }
 
@@ -406,4 +514,36 @@ void Visit(const koopa_raw_branch_t &branch) {
 void Visit(const koopa_raw_jump_t &jump) {
   string label_target = jump.target->name + 1;
   cout << "  j " << label_target << endl;
+}
+
+repr_t Visit(const koopa_raw_call_t &call, bool has_ret) {
+  repr_t repr;
+  for (size_t i = 0; i < call.args.len; ++i) {
+    koopa_raw_value_t arg = reinterpret_cast<koopa_raw_value_t>(call.args.buffer[i]);
+    repr_t arg_repr = Visit(arg);
+    assert(arg_repr.is_reg);
+    int reg_id = arg_repr.addr;  // currently it is saved in arg_reg_id
+    if (i < 8) {
+      int reg_ai = 7 + i;  // target
+      // move to ax
+      if (reg_id != reg_ai) {
+        // todo unsafe assert here, better make sure reg_ai is available
+        reg_allocator.alloc(reg_ai);
+        cout << "  mv " << format_reg(reg_ai) << ", " << format_reg(reg_id) << endl;
+        reg_allocator.free(reg_id);
+      }
+    } else {
+      int addr = (i - 8) * 4;  // it is really comfortable!
+      cout << "  sw " << format_reg(reg_id) << ", " << addr << "(sp)" << endl;
+    }
+  }
+  cout << "  call " << call.callee->name + 1 << endl;
+  
+  // save a0
+  if (has_ret) {
+    repr = {false, stack.get_top()};
+    stack.inc_top(4);
+    cout << "  sw a0" << ", " << repr.addr << "(sp)" << endl;
+  }
+  return repr;
 }

@@ -40,7 +40,7 @@ void FuncDefAST::Dump() {
   }
   cout << ")";
   func_type->Dump();
-  cout << " {" << endl << "\%entry:" << endl;
+  cout << " {" << endl << "\%entry_" << *ident << ":" << endl;
   block->Dump();
 
   // handle last empty ret block
