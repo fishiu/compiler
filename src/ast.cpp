@@ -129,15 +129,21 @@ void FuncDefAST::Dump() {
   if (lline.substr(0, 4) == "%ret")
     // if last line is ret, remove it
     ir = ir.substr(0, pt);
-  
-  // restore stream
-  cout.rdbuf(old_buf);
-  cout << ir;
 
-  if (is_void) {
-    cout << "  ret" << endl;
+  pt = ir.length() - 2;
+  lline = "";
+  while (ir[pt] != '\n')
+    lline = ir[pt--] + lline;
+  if (lline.substr(0, 5) != "  ret") {
+    if (*func_type == "void")
+      ir += "  ret\n";
+    else
+      ir += "  ret 0\n";
   }
-  cout << "}" << endl << endl;
+  cout.rdbuf(old_buf);
+
+  cout << ir;
+  cout << "}" << endl;
 }
 
 void FuncFParamAST::Dump() {
